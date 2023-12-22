@@ -97,7 +97,6 @@ impl Value {
 			typ = ValueType::Heal;
 		} else if let Some(idx) = p.find(|c: char| c.is_lowercase()) {
 			let p = &p[idx..];
-			dbg!(idx, &p);
 			if let Some(idx) = p.find(|c: char| !c.is_lowercase()) {
 				typ = ValueType::new(&p[..idx])
 			}
@@ -260,23 +259,43 @@ impl Line {
 
 #[cfg(test)]
 mod tests {
-	use std::fs::{self, File};
+
+	use std::{fs, ops::Sub};
 
 	use super::*;
 	#[test]
 	fn metadata_test() {
 		let f = fs::read("/home/oneofone/code/rust/swtormeter/log.txt").unwrap();
+		let mut cmpt = false;
+		let mut start: NaiveTime = NaiveTime::MIN;
+		let mut end: NaiveTime = NaiveTime::MIN;
 		for line in String::from_utf8_lossy(&f).lines() {
 			let l = Line::new(line);
-			let (typ, src, dst, act, value) = (
+			if l.action.effect == "EnterCombat" {
+				cmpt = true;
+				start = l.ts;
+				continue;
+			}
+			if l.action.effect == "ExitCombat" {
+				cmpt = false;
+				end = l.ts;
+				continue;
+			}
+			if !cmpt {
+				continue;
+			}
+			let (typ, src, dst, abt, act, value) = (
 				l.get_type(),
 				l.source.name,
 				l.target.name,
+				l.ability.name,
 				l.action.effect,
 				l.value.value,
 			);
-			println!("{} {} {} {} {}", "X", src, dst, act, value)
+			println!("{}", line);
+			println!("{:?} {} {} {} {} {}", typ, src, dst, abt, act, value)
 		}
+		println!("{}", end.sub(start).num_seconds());
 		// dbg!("x", "3503452067987731".parse::<u64>().ok());
 		// let result = Line::new("[19:46:01.686] [@Nyx'ayuna#686862584797878|(-109.03,-630.11,-63.40,108.12)|(263258/380355)] [=] [Berserk {4056205769048064}] [ApplyEffect {836045448945477}: Heal {836045448945500}] (3955) <1977>") ;
 		// dbg!(result);
