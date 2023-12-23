@@ -1,8 +1,8 @@
 use chrono::NaiveTime;
 
-pub fn extract_id(p: &str) -> u64 {
-	if let Some(start) = p.rfind('{') {
-		if let Some(end) = p.rfind('}') {
+pub fn extract_num(p: &str, l: char, r: char) -> u64 {
+	if let Some(start) = p.rfind(l) {
+		if let Some(end) = p.rfind(r) {
 			return p[start + 1..end].parse().unwrap_or(0);
 		}
 	}
@@ -30,7 +30,7 @@ impl Metadata {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum ValueType {
 	Charges,
 
@@ -81,6 +81,7 @@ pub struct Value {
 	pub value: i32,
 	pub tilde: i32,
 	pub absorbed: i32,
+	pub extra: i32,
 }
 
 impl Value {
@@ -121,6 +122,7 @@ impl Value {
 			} else {
 				0
 			},
+			extra: extract_num(p, '<', '>') as i32,
 		}
 	}
 }
@@ -269,6 +271,7 @@ mod tests {
 		let mut cmpt = false;
 		let mut start: NaiveTime = NaiveTime::MIN;
 		let mut end: NaiveTime = NaiveTime::MIN;
+		let mut heals = 0.;
 		for line in String::from_utf8_lossy(&f).lines() {
 			let l = Line::new(line);
 			if l.action.effect == "EnterCombat" {
@@ -279,6 +282,13 @@ mod tests {
 			if l.action.effect == "ExitCombat" {
 				cmpt = false;
 				end = l.ts;
+				let secs = end.sub(start).num_seconds() as f64;
+
+				if secs < 50. {
+					continue;
+				}
+				println!("{} {} {}", heals, end.sub(start), heals / secs);
+				heals = 0.;
 				continue;
 			}
 			if !cmpt {
@@ -290,10 +300,13 @@ mod tests {
 				l.target.name,
 				l.ability.name,
 				l.action.effect,
-				l.value.value,
+				l.value,
 			);
-			println!("{}", line);
-			println!("{:?} {} {} {} {} {}", typ, src, dst, abt, act, value)
+			if typ == ValueType::Heal && src.contains("Locu") {
+				heals += (l.value.value - value.extra) as f64;
+				// println!("{:?} {} {} {} {} {:?}", line, src, dst, abt, act, value)
+			}
+			//println!("{}", line);
 		}
 		println!("{}", end.sub(start).num_seconds());
 		// dbg!("x", "3503452067987731".parse::<u64>().ok());
