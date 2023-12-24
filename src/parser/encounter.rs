@@ -11,5 +11,3 @@ pub struct Encounter<'a> {
 	pub lines: Vec<Line<'a>>,
 	pub names: HashMap<u64, &'a str>,
 }
-
-pub fn parse() {}

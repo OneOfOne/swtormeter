@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, collections::HashMap, sync::OnceLock};
+use std::collections::HashMap;
 
 pub fn extract_num(p: &str, l: char, r: char, right: bool) -> u64 {
 	if right {

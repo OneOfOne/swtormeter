@@ -1,5 +1,3 @@
-use super::metadata::Metadata;
-
 pub type Direction = f64;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -31,7 +29,7 @@ pub struct Actor<'a> {
 	pub player: bool,
 	pub companion: bool,
 	pub npc: bool,
-	pub local_player: bool,
+	//pub local_player: bool,
 	pub health: i32,
 	pub max_health: i32,
 	pub pos: Position,
@@ -50,13 +48,11 @@ impl<'a> Actor<'a> {
 			id = name[idx + 1..].parse().unwrap();
 			name = &name[..idx];
 		}
-		// local_player
+
 		let mut companion = false;
 
 		let player = if name.starts_with('@') {
-			if name.contains('/') {
-				companion = true
-			}
+			companion = name.contains('/');
 			!companion
 		} else {
 			false
@@ -77,7 +73,7 @@ impl<'a> Actor<'a> {
 			player,
 			companion,
 			npc: !player && !companion,
-			local_player: false,
+			// local_player: false,
 			health: health.next().unwrap(),
 			max_health: health.next().unwrap(),
 			pos,

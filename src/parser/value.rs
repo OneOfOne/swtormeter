@@ -1,93 +1,51 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum ValueType {
+pub enum Value {
 	Charges(i32),
 
 	Damage {
 		typ: Damage,
-		value: i32,
+		total: i32,
+		critical: bool,
+	},
+
+	Absorbed {
+		total: i32,
 		absorbed: i32,
 		shielded: bool,
 	},
+
 	Avoidance(Avoidance),
 
 	Threat(i32),
+	Reflected(i32),
 
-	Heal(i32),
+	Heal {
+		total: i32,
+		effective: i32,
+		critical: bool,
+	},
 
 	#[default]
 	None,
 }
 
-impl ValueType {
-	pub fn new(id: &str, v: i32, absorbed: i32, shielded: bool) -> Self {
-		match id {
-			ValueIDs::CHARGES => Self::Charges(v),
-			//
-			ValueIDs::ENERGY => Self::Damage {
-				typ: Damage::Energy,
-				value: v,
-				absorbed,
-				shielded,
-			},
-			ValueIDs::KINETIC => Self::Damage {
-				typ: Damage::Kinetic,
-				value: v,
-				absorbed,
-				shielded,
-			},
-			ValueIDs::ELEMENTAL => Self::Damage {
-				typ: Damage::Elemental,
-				value: v,
-				absorbed,
-				shielded,
-			},
-			ValueIDs::INTERNAL => Self::Damage {
-				typ: Damage::Internal,
-				value: v,
-				absorbed,
-				shielded,
-			},
-			//
-			//ValueIDs::ABSORBED => Self::Avoidance(Avoidance::Absorbed, absorb),
-			ValueIDs::PARRY => Self::Avoidance(Avoidance::Parry),
-			ValueIDs::DEFLECT => Self::Avoidance(Avoidance::Deflect),
-			ValueIDs::DODGE => Self::Avoidance(Avoidance::Dodge),
-			ValueIDs::MISS => Self::Avoidance(Avoidance::Miss),
-			_ => Self::None,
-		}
-	}
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum Hit {
-	Critical,
-	#[default]
-	Normal,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Value {
-	pub typ: ValueType,
-	pub critical: bool,
-	pub tilde: i32,
-}
-
 impl Value {
-	pub fn new<'a>(p: &'a str, eff: &Action<'a>) -> Self {
+	pub fn new<'a>(p: &'a str, act: &Action<'a>) -> Self {
 		let parts = p
 			.split(' ')
 			.map(|p| p.trim_matches(|c| c == '(' || c == ')'));
 
 		// dbg!(p, eff);
-		let mut value = 0;
+		let mut total = 0;
 		let mut got_value = false;
 		let mut absorbed = 0;
 		let mut tilde = 0;
 		let mut critical = false;
 		let mut shielded = false;
-		let mut value_id: &'a str = "";
+		let mut reflected = false;
+		let mut value_id = 0;
 		let mut threat: i32 = 0;
 
 		for part in parts {
@@ -97,7 +55,7 @@ impl Value {
 			// dbg!(part);
 			if !got_value && !part.starts_with('<') {
 				got_value = true;
-				value = if part.ends_with('*') {
+				total = if part.ends_with('*') {
 					critical = true;
 					part.strip_suffix('*').unwrap_or("0").parse().unwrap_or(0)
 				} else {
@@ -105,10 +63,12 @@ impl Value {
 				};
 			} else if let Some(v) = part.strip_prefix('~') {
 				tilde = v.parse().unwrap();
-			} else if part.starts_with('{') && value_id.is_empty() {
-				value_id = part;
+			} else if part.starts_with('{') && value_id == 0 {
+				value_id = part[1..part.rfind('}').unwrap()].parse().unwrap();
 			} else if part == ValueIDs::SHIELD {
-				shielded = true
+				shielded = true;
+			} else if part == ValueIDs::REFLECTED {
+				reflected = true;
 			} else if got_value && absorbed == 0 && part.starts_with(|c: char| c.is_ascii_digit()) {
 				absorbed = part.parse().unwrap()
 			} else if part.starts_with('<') {
@@ -116,25 +76,61 @@ impl Value {
 			}
 		}
 
-		let id = format!("{{{}}}", eff.effect.id);
-		let typ = match id.as_str() {
-			ActionIDs::MODIFY_THREAT => ValueType::Threat(threat),
-			ActionIDs::HEAL => {
-				if threat > 0 {
-					//dbg!(p);
+		match act.effect.id {
+			EffectIDs::MODIFY_THREAT => Value::Threat(threat),
+			EffectIDs::HEAL => Value::Heal {
+				total,
+				effective: tilde,
+				critical,
+			},
+			EffectIDs::DAMAGE => {
+				if shielded || absorbed > 0 {
+					Value::Absorbed {
+						total,
+						absorbed,
+						shielded,
+					}
+				} else if reflected {
+					Value::Reflected(total)
+				} else {
+					Value::dmg_or_avoid(value_id, total, critical)
 				}
-				// ValueType::Heal(value - tilde - threat)
-				ValueType::Heal(if tilde > 0 { tilde } else { value })
 			}
-			ActionIDs::DAMAGE => ValueType::new(value_id, value, absorbed, shielded),
-			_ => ValueType::None,
-		};
+			_ => Value::None,
+		}
+	}
 
-		// dbg!(&id, id == ActionIDs::HEAL, typ);
-		Self {
-			typ,
-			critical,
-			tilde,
+	fn dmg_or_avoid(id: u64, total: i32, critical: bool) -> Self {
+		match id {
+			ValueIDs::CHARGES => Self::Charges(total),
+			//
+			ValueIDs::ENERGY => Self::Damage {
+				typ: Damage::Energy,
+				total,
+				critical,
+			},
+			ValueIDs::KINETIC => Self::Damage {
+				typ: Damage::Kinetic,
+				total,
+				critical,
+			},
+			ValueIDs::ELEMENTAL => Self::Damage {
+				typ: Damage::Elemental,
+				total,
+				critical,
+			},
+			ValueIDs::INTERNAL => Self::Damage {
+				typ: Damage::Internal,
+				total,
+				critical,
+			},
+			//
+			//ValueIDs::ABSORBED => Self::Avoidance(Avoidance::Absorbed, absorb),
+			ValueIDs::PARRY => Self::Avoidance(Avoidance::Parry),
+			ValueIDs::DEFLECT => Self::Avoidance(Avoidance::Deflect),
+			ValueIDs::DODGE => Self::Avoidance(Avoidance::Dodge),
+			ValueIDs::MISS => Self::Avoidance(Avoidance::Miss),
+			_ => Self::None,
 		}
 	}
 }
