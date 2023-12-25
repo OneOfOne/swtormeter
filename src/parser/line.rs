@@ -2,17 +2,17 @@ use super::{Action, Actor, Metadata, Value};
 
 use chrono::NaiveTime;
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Line<'a> {
+#[derive(Debug, Clone, Default)]
+pub struct Line {
 	pub ts: NaiveTime,
-	pub source: Actor<'a>,
-	pub target: Actor<'a>,
-	pub ability: Metadata<'a>,
-	pub action: Action<'a>,
+	pub source: Actor,
+	pub target: Actor,
+	pub ability: Metadata,
+	pub action: Action,
 	pub value: Value,
 }
-impl<'a> Line<'a> {
-	pub fn new(l: &'a str) -> Option<Self> {
+impl Line {
+	pub fn new(l: &String) -> Option<Self> {
 		let mut parts = l.split(']').map(|s| s.trim().trim_start_matches('['));
 		let ts = NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f").unwrap();
 

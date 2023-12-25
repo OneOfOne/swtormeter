@@ -1,16 +1,19 @@
 use crate::parser::utils::*;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Metadata<'a> {
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Metadata {
 	pub id: u64,
-	pub name: &'a str,
+	pub name: String,
 }
 
-impl<'a> Metadata<'a> {
-	pub fn new(p: &'a str) -> Self {
+impl Metadata {
+	pub fn new(p: &str) -> Self {
 		let id = extract_num(p, '{', '}', false);
 		let name = extract_until(p, '{').trim();
 		//println!("{} {} {}", id, name, m.get(id));
-		Self { id, name }
+		Self {
+			id,
+			name: name.into(),
+		}
 	}
 }

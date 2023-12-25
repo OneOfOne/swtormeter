@@ -5,21 +5,24 @@ use notify::{
 use std::borrow::{Borrow, BorrowMut};
 use std::fs::File;
 use std::io::{self, BufRead, Seek, SeekFrom};
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::yield_now;
+
+use super::{Encounter, Line};
 
 type INotifyRes = Result<Event>;
 type StdReceiver = std::sync::mpsc::Receiver<INotifyRes>;
 
 #[derive(Debug, Clone)]
 pub struct Reader {
-	tx: Sender<String>,
+	tx: Sender<Line>,
 }
 
 impl Reader {
-	pub fn new(tx: Sender<String>) -> Self {
+	pub fn new(tx: Sender<Line>) -> Self {
 		Self { tx }
 	}
 
@@ -48,22 +51,19 @@ impl Reader {
 				if ln == 0 {
 					break;
 				}
-				self.tx
-					.send(String::from_utf8_lossy(&buf[..ln]).trim_end().to_string())
-					.await
-					.unwrap();
+				let b: String = unsafe { String::from_utf8_unchecked(buf.clone()).trim().into() };
+				if let Some(l) = Line::new(&b) {
+					self.tx.send(l).await.unwrap();
+				}
 				buf.clear();
 				yield_now().await;
 			}
 
-			let mut pos: u64 = f.metadata().unwrap().len();
+			let pos = f.metadata().unwrap().len();
 			for res in &wrx {
-				dbg!(&res);
+				//dbg!(&res);
 				match res {
-					Ok(Event {
-						kind: EventKind::Access(AccessKind::Close(AccessMode::Write)),
-						..
-					}) => {
+					Ok(_) => {
 						let npos = f.metadata().unwrap().len();
 						if npos == pos {
 							continue;
@@ -72,67 +72,27 @@ impl Reader {
 						continue 'out;
 					}
 					Err(error) => println!("{error:?}"),
-					_ => {}
 				}
 			}
 		}
 	}
 }
-
-pub async fn tail_file(path: &str) -> Result<Receiver<String>> {
-	let (tx, mut rx) = channel::<String>(128);
+fn blah(s: Rc<&str>) {}
+pub async fn tail_file<'a>(path: &'a str) -> Result<Receiver<Line>> {
+	let (tx, mut rx) = channel::<Line>(8);
+	let path = path.clone();
 	let mut rd = Reader::new(tx);
 	rd.load(path).await.unwrap();
-	while let Some(v) = rx.recv().await {
-		println!("x {}", v);
+
+	let mut enc = Encounter::new();
+	while let Some(l) = rx.recv().await {
+		if let Some(m) = enc.append(l.clone()) {
+			print!("{esc}c", esc = 27 as char);
+			for (k, v) in &enc.heal {
+				println!("x {} {:?}", k, &v);
+			}
+			println!("\n{}: {:?}", l.ability.name, l.value);
+		}
 	}
-	// let mut f = File::open(path)?;
-	// let mut pos = f.metadata()?.len();
-	// // set up watcher
-	// let (tx, rx) = std::sync::mpsc::channel();
-	// let mut watcher = RecommendedWatcher::new(tx, Config::default())?;
-	// watcher.watch(path.as_ref(), RecursiveMode::NonRecursive)?;
-	//
-	// tokio::spawn(async move {
-	// 	let _watcher = watcher;
-	// 	let f = f;
-	// 	let mut send_buf = async |init: bool, f: &File| {
-	// 		if !init {
-	// 			let npos = f.metadata().unwrap().len();
-	// 			if npos == pos.clone() {
-	// 				return;
-	// 			}
-	// 			pos = npos;
-	//
-	// 			f.seek(SeekFrom::Start(pos + 1)).unwrap();
-	// 		}
-	//
-	// 		let mut rd = io::BufReader::new(f);
-	// 		let mut buf = vec![];
-	// 		loop {
-	// 			if let Ok(ln) = rd.read_until(b'\n', &mut buf) {
-	// 				if ln == 0 {
-	// 					break;
-	// 				}
-	// 				// ln -2 because the lines end with \r\n
-	// 				rtx.send(String::from_utf8_lossy(&buf[..ln - 2]).to_string())
-	// 					.await
-	// 					.unwrap();
-	// 				buf.clear();//
-	// 			} else {
-	// 				break;
-	// 			}
-	// 		}
-	// 	};
-	//
-	// 	send_buf(true, &f);
-	//
-	// 	for res in rx {
-	// 		match res {
-	// 			Ok(_event) => send_buf(false, &f).await,
-	// 			Err(error) => println!("{error:?}"),
-	// 		}
-	// 	}
-	// });
 	Ok(rx)
 }

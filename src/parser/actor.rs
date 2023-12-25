@@ -22,10 +22,10 @@ impl Position {
 	}
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Actor<'a> {
+#[derive(Debug, Clone, Default)]
+pub struct Actor {
 	pub id: u64,
-	pub name: &'a str,
+	pub name: String,
 	pub player: bool,
 	pub companion: bool,
 	pub npc: bool,
@@ -35,8 +35,8 @@ pub struct Actor<'a> {
 	pub pos: Position,
 }
 
-impl<'a> Actor<'a> {
-	pub fn new(p: &'a str) -> Self {
+impl Actor {
+	pub fn new(p: &str) -> Self {
 		if p.is_empty() || p == "=" {
 			return Actor::default();
 		}
@@ -45,7 +45,11 @@ impl<'a> Actor<'a> {
 		let mut name = parts.next().unwrap().trim();
 		let mut id: u64 = 0;
 		if let Some(idx) = name.find('#') {
-			id = name[idx + 1..].parse().unwrap();
+			id = if let Some(sidx) = name.rfind('/') {
+				name[idx + 1..sidx].parse().unwrap()
+			} else {
+				name[idx + 1..].parse().unwrap()
+			};
 			name = &name[..idx];
 		}
 
@@ -69,7 +73,7 @@ impl<'a> Actor<'a> {
 
 		Actor {
 			id,
-			name,
+			name: name.into(),
 			player,
 			companion,
 			npc: !player && !companion,

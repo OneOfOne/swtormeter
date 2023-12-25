@@ -32,7 +32,7 @@ pub enum Value {
 }
 
 impl Value {
-	pub fn new<'a>(p: &'a str, act: &Action<'a>) -> Self {
+	pub fn new<'a>(p: &'a str, act: &Action) -> Self {
 		let parts = p
 			.split(' ')
 			.map(|p| p.trim_matches(|c| c == '(' || c == ')'));
