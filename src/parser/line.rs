@@ -5,15 +5,16 @@ use chrono::NaiveTime;
 #[derive(Debug, Clone, Default)]
 pub struct Line {
 	pub ts: NaiveTime,
-	pub source: Actor,
-	pub target: Actor,
+	pub source: Option<Actor>,
+	pub target: Option<Actor>,
 	pub ability: Metadata,
 	pub action: Action,
 	pub value: Value,
 }
 impl Line {
-	pub fn new(l: &String) -> Option<Self> {
-		let mut parts = l.split(']').map(|s| s.trim().trim_start_matches('['));
+	pub fn new<'a>(l: &'a str) -> Option<Self> {
+		let mut parts = l.splitn(6, ']').map(|s| s.trim().trim_start_matches('['));
+		//dbg!(&parts);
 		let ts = NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f").unwrap();
 
 		let source = Actor::new(parts.next().unwrap());

@@ -1,4 +1,4 @@
-pub struct EffectIDs {}
+pub struct EffectIDs;
 impl EffectIDs {
 	pub const ENTER_COMBAT: u64 = 836045448945489;
 	pub const EXIT_COMBAT: u64 = 836045448945490;
@@ -8,7 +8,7 @@ impl EffectIDs {
 	pub const HEAL: u64 = 836045448945500;
 }
 
-pub struct ValueIDs {}
+pub struct ValueIDs;
 impl ValueIDs {
 	pub const CHARGES: u64 = 836045448953667;
 
@@ -43,13 +43,4 @@ pub enum Avoidance {
 	Deflect,
 	Dodge,
 	Miss,
-}
-
-//#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ID(u64);
-
-impl ID {
-	pub fn name<'a>() -> &'a str {
-		""
-	}
 }

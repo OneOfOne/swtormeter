@@ -1,6 +1,6 @@
 use crate::parser::utils::*;
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Metadata {
 	pub id: u64,
 	pub name: String,
