@@ -37,17 +37,21 @@ mod tests {
 	use std::{fs, ops::Sub};
 
 	use super::*;
-	#[test]
-	fn metadata_test() {
-		let f = fs::read("/home/oneofone/code/rust/swtormeter/log.txt").unwrap();
+	#[tokio::test]
+	async fn metadata_test() {
+		// let f = fs::read("/home/oneofone/code/rust/swtormeter/log.txt").unwrap();
 		let mut cmpt = false;
 		let mut start: NaiveTime = NaiveTime::MIN;
 		let mut end: NaiveTime = NaiveTime::MIN;
 		let mut heals = 0i32;
 		let mut count = 0;
-		let tx = reader::tail_file("/home/oneofone/code/rust/swtormeter/log.txt").unwrap();
+		let mut rt = tokio::runtime::Runtime::new().unwrap();
+		//let mut tx = reader::tail_file("/home/oneofone/code/rust/swtormeter/log.txt")
+		let mut tx = reader::tail_file("/home/oneofone/code/rust/swtormeter/blah")
+			.await
+			.unwrap();
 
-		for line in tx {
+		for line in tx.recv().await {
 			//dbg!(&line);
 			if let Some(l) = Line::new(line.as_str()) {
 				// dbg!(l.value);
