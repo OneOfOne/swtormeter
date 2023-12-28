@@ -1,7 +1,7 @@
 use std::{fs::read_dir, path::Path};
 
 use chrono::NaiveDateTime;
-use tokio::sync::mpsc::{Receiver};
+use tokio::sync::mpsc::Receiver;
 
 pub mod action;
 use action::*;
@@ -35,7 +35,7 @@ pub async fn parse<'a>(dir: &'a str) -> std::io::Result<()> {
 		.collect();
 	paths.sort();
 
-	let path = paths.get(paths.len() - 3).unwrap();
+	let path = paths.get(paths.len() - 1).unwrap();
 	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
 	println!("loaded {}", name);
 
