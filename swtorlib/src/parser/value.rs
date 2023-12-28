@@ -1,6 +1,6 @@
 use super::*;
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Value {
 	Charges(i32),
 

@@ -1,3 +1,8 @@
+pub struct EventIDs;
+impl EventIDs {
+	pub const AREA_ENTERED: u64 = 836045448953664;
+}
+
 pub struct EffectIDs;
 impl EffectIDs {
 	pub const ENTER_COMBAT: u64 = 836045448945489;
@@ -28,7 +33,7 @@ impl ValueIDs {
 	pub const MISS: u64 = 836045448945502; //
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Damage {
 	Energy,
 	Kinetic,
@@ -36,7 +41,7 @@ pub enum Damage {
 	Internal,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Avoidance {
 	Absorbed,
 	Parry,

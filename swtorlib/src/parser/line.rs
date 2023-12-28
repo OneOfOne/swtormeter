@@ -14,8 +14,7 @@ pub struct Line {
 impl Line {
 	pub fn new<'a>(l: &'a str) -> Option<Self> {
 		let mut parts = l.splitn(6, ']').map(|s| s.trim().trim_start_matches('['));
-		//dbg!(&parts);
-		let ts = NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f").unwrap();
+		let ts = NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f").expect(l);
 
 		let source = Actor::new(parts.next().unwrap());
 		let target = Actor::new(parts.next().unwrap());

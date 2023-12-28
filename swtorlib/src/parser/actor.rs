@@ -28,14 +28,15 @@ impl Position {
 	}
 }
 
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Eq, Hash, PartialEq)]
 pub enum ActorType {
 	#[default]
 	Player,
 	NPC,
 	Companion(Metadata),
 }
-#[derive(Debug, Clone, Default)]
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
 pub struct Actor {
 	pub id: u64,
 	pub name: String,
@@ -43,7 +44,7 @@ pub struct Actor {
 	//pub local_player: bool,
 	pub health: i32,
 	pub max_health: i32,
-	pub pos: Position,
+	// pub pos: Position,
 }
 
 impl Actor {
@@ -54,7 +55,7 @@ impl Actor {
 
 		let mut parts = p.split('|').map(|s| s.trim());
 		let mut name = parts.next().unwrap().trim();
-		let mut id: u64 = 0;
+		let id: u64;
 		let mut typ = ActorType::Player;
 		if let Some(idx) = name.find('#') {
 			id = if let Some(sidx) = name.rfind('/') {
@@ -63,14 +64,16 @@ impl Actor {
 			} else {
 				name[idx + 1..].parse().unwrap()
 			};
-			name = &name[..idx];
+			name = &name[1..idx];
 		} else {
 			typ = ActorType::NPC;
 			id = extract_num(p, '{', '}', false);
 			name = extract_until(p, '{').trim();
 		};
 
-		let pos = Position::new(parts.next().unwrap());
+		// let pos = Position::new(parts.next().unwrap());
+		_ = parts.next().unwrap();
+
 		let mut health = parts
 			.next()
 			.unwrap()
@@ -85,7 +88,7 @@ impl Actor {
 			// local_player: false,
 			health: health.next().unwrap(),
 			max_health: health.next().unwrap(),
-			pos,
+			//pos,
 		})
 	}
 }

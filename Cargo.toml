@@ -7,8 +7,7 @@ edition = "2021"
 
 [dependencies]
 chrono = { version = "0.4.31", features = ["std"], default-features = false }
-notify = { version = "6.1.1", features = ["mio"] }
-tokio = { version = "1.35.1", features = ["full", "mio"] }
+tokio = { version = "1.35.1", features = ["tokio-macros", "sync", "io-std", "macros", "io-util", "fs", "rt-multi-thread", "full"] }
 
 [lib]
 name = "swparser"
