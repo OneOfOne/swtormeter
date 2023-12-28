@@ -36,6 +36,16 @@ pub fn extract_until(p: &str, r: char) -> &str {
 	}
 }
 
+pub fn num_with_unit(n: f64) -> String {
+	if n > 1_000_000. {
+		format!("{:.02}M", n / 1_000_000.)
+	} else if n > 1_000. {
+		format!("{:.02}K", n / 1_000.)
+	} else {
+		format!("{:.02}", n)
+	}
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct IdMap<'a> {
 	m: HashMap<u64, &'a str>,

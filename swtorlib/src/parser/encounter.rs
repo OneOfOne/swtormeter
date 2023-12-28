@@ -1,12 +1,16 @@
 use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::ops::Sub;
+use std::ops::{Index, Sub};
+
+use crate::parser::utils::num_with_unit;
 
 use super::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct Meter {
+	pub name: String,
+
 	pub casts: i32,
 	pub total: i32,
 	pub crits: i32,
@@ -16,8 +20,11 @@ pub struct Meter {
 }
 
 impl Meter {
-	pub fn new() -> Self {
-		Self { ..Self::default() }
+	pub fn new(name: String) -> Self {
+		Self {
+			name,
+			..Self::default()
+		}
 	}
 
 	pub fn update(&mut self, spell: &String, value: i32, crit: bool, seconds: i64) {
@@ -50,11 +57,12 @@ impl fmt::Display for Meter {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(
 			f,
-			"casts: {}, total: {}, crit: {:.02}%, xps: {:.02}, max: {:?}",
-			self.casts,
-			self.total,
+			"name: {:15} | casts: {:6} | total: {:8} | crit: {:5.02}% | xps: {:8.} | max: {:?}",
+			&self.name,
+			num_with_unit(self.casts as f64),
+			num_with_unit(self.total as f64),
 			100. * (self.crits as f64 / self.casts as f64),
-			self.xps,
+			num_with_unit(self.xps),
 			self.max_cast().unwrap_or(("n/a".to_string(), 0)),
 		)
 	}
@@ -74,8 +82,8 @@ pub struct Encounter {
 
 	//pub lines: Vec<Line>,
 	pub npcs: HashSet<String>,
-	pub heal: HashMap<String, Meter>,
-	pub dmg: HashMap<String, Meter>,
+	pub heal: Vec<Meter>,
+	pub dmg: Vec<Meter>,
 }
 
 impl Encounter {
@@ -111,9 +119,10 @@ impl Encounter {
 					effective: e,
 					critical: c,
 				} => {
-					let m = self.heal.entry(name).or_insert(Meter::new());
-					let val = if e > 0 { e } else { t };
-					m.update(&l.ability.name, val, c, l.ts.sub(self.start).num_seconds());
+					Self::update(&mut self.heal, name, |m| {
+						let val = if e > 0 { e } else { t };
+						m.update(&l.ability.name, val, c, l.ts.sub(self.start).num_seconds());
+					});
 					return true;
 				}
 
@@ -122,8 +131,9 @@ impl Encounter {
 					critical: c,
 					typ: _tt,
 				} => {
-					let m = self.dmg.entry(name).or_insert(Meter::new());
-					m.update(&l.ability.name, t, c, l.ts.sub(self.start).num_seconds());
+					Self::update(&mut self.dmg, name, |m| {
+						m.update(&l.ability.name, t, c, l.ts.sub(self.start).num_seconds());
+					});
 					return true;
 				}
 
@@ -132,6 +142,17 @@ impl Encounter {
 		}
 
 		false
+	}
+
+	fn update<F: FnMut(&mut Meter) -> ()>(v: &mut Vec<Meter>, name: String, mut process: F) {
+		let m = if let Some(i) = v.iter().position(|m| m.name == name) {
+			&mut v[i]
+		} else {
+			v.push(Meter::new(name.clone()));
+			v.last_mut().unwrap()
+		};
+		process(m);
+		v.sort_by(|a, b| b.xps.total_cmp(&a.xps))
 	}
 }
 
@@ -208,6 +229,7 @@ impl Encounters {
 			}
 
 			let ln = self.all.len();
+
 			match l.action.effect.id {
 				EffectIDs::ENTER_COMBAT => {
 					let mut e = Encounter::default();
@@ -220,6 +242,7 @@ impl Encounters {
 					if ln > 0 {
 						let e = self.all.get_mut(ln - 1).unwrap();
 						e.append(l);
+						process(e);
 					}
 				}
 

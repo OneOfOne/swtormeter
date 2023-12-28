@@ -42,26 +42,22 @@ pub async fn parse<'a>(dir: &'a str) -> std::io::Result<()> {
 	let mut rx = Reader::parse(path.as_str()).await?;
 	let mut enc = Encounters::new(name);
 	enc.process(&mut rx, |enc| {
-		print!("{esc}c{esc}c", esc = 27 as char);
+		//print!("{esc}c{esc}c", esc = 27 as char);
 		println!("area: {}\n", enc.area);
 		println!(
 			"npcs: {}\n",
 			enc.npcs.clone().drain().collect::<Vec<String>>().join(", ")
 		);
 		println!("----- hps -----\n");
-		let mut vec = enc.heal.iter().collect::<Vec<_>>();
-		vec.sort_by(|(_, &ref a), (_, &ref b)| b.xps.total_cmp(&a.xps));
 
-		for (k, v) in vec {
-			println!("{:20} | {}", k, &v);
+		for v in enc.heal.clone() {
+			println!("{}", &v);
 		}
 
 		println!("\n----- dps -----\n");
-		let mut vec = enc.dmg.iter().collect::<Vec<_>>();
-		vec.sort_by(|(_, &ref a), (_, &ref b)| b.xps.total_cmp(&a.xps));
 
-		for (k, v) in vec {
-			println!("{:20} | {}", k, &v);
+		for v in enc.dmg.clone() {
+			println!("{}", &v);
 		}
 	})
 	.await;
