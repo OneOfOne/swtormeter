@@ -1,7 +1,7 @@
-use std::{fs::read_dir, path::Path, rc::Rc};
+use std::{fs::read_dir, path::Path};
 
 use chrono::NaiveDateTime;
-use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::{Receiver};
 
 pub mod action;
 use action::*;
@@ -35,40 +35,36 @@ pub async fn parse<'a>(dir: &'a str) -> std::io::Result<()> {
 		.collect();
 	paths.sort();
 
-	let path = paths.pop().unwrap();
+	let path = paths.get(paths.len() - 3).unwrap();
 	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
 	println!("loaded {}", name);
 
 	let mut rx = Reader::parse(path.as_str()).await?;
 	let mut enc = Encounters::new(name);
-	while let Some(l) = rx.recv().await {
-		if let Some(enc) = enc.append(l.clone()) {
-			print!("{esc}c{esc}c", esc = 27 as char);
-			println!("area: {}\n", enc.area);
-			println!(
-				"npcs: {}\n",
-				enc.npcs.clone().drain().collect::<Vec<String>>().join(", ")
-			);
-			println!("----- hps -----\n");
-			let mut vec = enc.heal.iter().collect::<Vec<_>>();
-			vec.sort_by(|(_, &ref a), (_, &ref b)| b.xps.total_cmp(&a.xps));
+	enc.process(&mut rx, |enc| {
+		print!("{esc}c{esc}c", esc = 27 as char);
+		println!("area: {}\n", enc.area);
+		println!(
+			"npcs: {}\n",
+			enc.npcs.clone().drain().collect::<Vec<String>>().join(", ")
+		);
+		println!("----- hps -----\n");
+		let mut vec = enc.heal.iter().collect::<Vec<_>>();
+		vec.sort_by(|(_, &ref a), (_, &ref b)| b.xps.total_cmp(&a.xps));
 
-			for (k, v) in vec {
-				println!("{:20} | {}", k, &v);
-			}
-
-			println!("\n----- dps -----\n");
-			let mut vec = enc.dmg.iter().collect::<Vec<_>>();
-			vec.sort_by(|(_, &ref a), (_, &ref b)| b.xps.total_cmp(&a.xps));
-
-			for (k, v) in vec {
-				println!("{:20} | {}", k, &v);
-			}
-
-			//println!("\n{}: {:?}", l.ability.name, l.value);
+		for (k, v) in vec {
+			println!("{:20} | {}", k, &v);
 		}
-	}
 
+		println!("\n----- dps -----\n");
+		let mut vec = enc.dmg.iter().collect::<Vec<_>>();
+		vec.sort_by(|(_, &ref a), (_, &ref b)| b.xps.total_cmp(&a.xps));
+
+		for (k, v) in vec {
+			println!("{:20} | {}", k, &v);
+		}
+	})
+	.await;
 	Ok(())
 }
 
@@ -94,6 +90,6 @@ mod tests {
 	#[tokio::test]
 	async fn parse_test() {
 		dbg!(logs_path());
-		parse(logs_path().unwrap().as_str()).await;
+		_ = parse(logs_path().unwrap().as_str()).await;
 	}
 }

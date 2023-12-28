@@ -1,11 +1,9 @@
+use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::rc::Rc;
-
-use chrono::NaiveTime;
+use std::ops::Sub;
 
 use super::*;
-use std::ops::Sub;
 
 #[derive(Debug, Clone, Default)]
 pub struct Meter {
@@ -22,7 +20,7 @@ impl Meter {
 		Self { ..Self::default() }
 	}
 
-	pub fn add(&mut self, spell: &String, value: i32, crit: bool, seconds: i64) {
+	pub fn update(&mut self, spell: &String, value: i32, crit: bool, seconds: i64) {
 		self.casts += 1;
 		self.total += value;
 		if crit {
@@ -86,9 +84,6 @@ impl Encounter {
 		match l.action.effect.id {
 			EffectIDs::ENTER_COMBAT => {
 				self.start = l.ts;
-				if self.dmg.len() > 0 || self.heal.len() > 0 {
-					panic!("wtf");
-				}
 				return false;
 			}
 
@@ -117,22 +112,18 @@ impl Encounter {
 					critical: c,
 				} => {
 					let m = self.heal.entry(name).or_insert(Meter::new());
-					m.add(
-						&l.ability.name,
-						if e > 0 { e } else { t },
-						c,
-						l.ts.sub(self.start).num_seconds(),
-					);
+					let val = if e > 0 { e } else { t };
+					m.update(&l.ability.name, val, c, l.ts.sub(self.start).num_seconds());
 					return true;
 				}
 
 				Value::Damage {
 					total: t,
 					critical: c,
-					..
+					typ: _tt,
 				} => {
 					let m = self.dmg.entry(name).or_insert(Meter::new());
-					m.add(&l.ability.name, t, c, l.ts.sub(self.start).num_seconds());
+					m.update(&l.ability.name, t, c, l.ts.sub(self.start).num_seconds());
 					return true;
 				}
 
@@ -185,7 +176,6 @@ impl Encounters {
 				e.area = self.last_area.clone();
 				e.append(l);
 				self.all.push(e);
-				None
 			}
 
 			EffectIDs::EXIT_COMBAT => {
@@ -193,8 +183,8 @@ impl Encounters {
 					let e = self.all.get_mut(ln - 1).unwrap();
 					e.append(l);
 				}
-				None
 			}
+
 			_ => {
 				if ln > 0 {
 					let e = self.all.get_mut(ln - 1).unwrap();
@@ -205,7 +195,45 @@ impl Encounters {
 						return Some(e.clone());
 					}
 				}
-				None
+			}
+		};
+		None
+	}
+
+	pub async fn process<F: Fn(&Encounter)>(&mut self, rx: &mut Receiver<Line>, process: F) {
+		while let Some(l) = rx.recv().await {
+			if l.action.event.id == EventIDs::AREA_ENTERED {
+				self.last_area = l.action.effect.name;
+				continue;
+			}
+
+			let ln = self.all.len();
+			match l.action.effect.id {
+				EffectIDs::ENTER_COMBAT => {
+					let mut e = Encounter::default();
+					e.area = self.last_area.clone();
+					e.append(l);
+					self.all.push(e);
+				}
+
+				EffectIDs::EXIT_COMBAT => {
+					if ln > 0 {
+						let e = self.all.get_mut(ln - 1).unwrap();
+						e.append(l);
+					}
+				}
+
+				_ => {
+					if ln > 0 {
+						let e = self.all.get_mut(ln - 1).unwrap();
+						if e.end != NaiveTime::MIN {
+							continue;
+						}
+						if e.append(l) {
+							process(e);
+						}
+					}
+				}
 			}
 		}
 	}
