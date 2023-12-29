@@ -1,8 +1,9 @@
 use chrono::NaiveDateTime;
 
+use std::io::SeekFrom;
 use std::time::Duration;
 use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use tokio::time::sleep;
@@ -19,8 +20,8 @@ impl Reader {
 		dbg!(start);
 
 		let (tx, rx) = channel::<Line>(8);
-		let f = File::open(fp).await?;
-		//	_ = f.seek(SeekFrom::End(0)).await?;
+		let mut f = File::open(fp).await?;
+		_ = f.seek(SeekFrom::End(0)).await?;
 
 		//self.f.replace(Arc::new(f));
 		tokio::spawn(Self::process(tx, f));

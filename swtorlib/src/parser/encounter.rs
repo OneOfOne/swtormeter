@@ -1,20 +1,19 @@
 use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::ops::{Index, Sub};
+use std::ops::{Sub};
 
-use crate::parser::utils::num_with_unit;
-
+use super::utils::NumWithUnit;
 use super::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct Meter {
 	pub name: String,
 
-	pub casts: i32,
-	pub total: i32,
-	pub crits: i32,
-	pub xps: f64,
+	pub casts: NumWithUnit,
+	pub total: NumWithUnit,
+	pub crits: NumWithUnit,
+	pub xps: NumWithUnit,
 
 	pub max: HashMap<String, i32>,
 }
@@ -28,12 +27,12 @@ impl Meter {
 	}
 
 	pub fn update(&mut self, spell: &String, value: i32, crit: bool, seconds: i64) {
-		self.casts += 1;
-		self.total += value;
+		self.casts += NumWithUnit(1.);
+		self.total += NumWithUnit(value as f64);
 		if crit {
-			self.crits += 1;
+			self.crits += NumWithUnit(1.);
 		}
-		self.xps = self.total as f64 / seconds as f64;
+		self.xps = self.total / NumWithUnit(seconds as f64);
 
 		let max = self.max.entry(spell.clone()).or_insert(0);
 		if value > *max {
@@ -55,16 +54,25 @@ impl Meter {
 
 impl fmt::Display for Meter {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		let crit = NumWithUnit(100.) * (self.crits / self.casts);
 		write!(
 			f,
-			"name: {:15} | casts: {:6} | total: {:8} | crit: {:5.02}% | xps: {:8.} | max: {:?}",
-			&self.name,
-			num_with_unit(self.casts as f64),
-			num_with_unit(self.total as f64),
-			100. * (self.crits as f64 / self.casts as f64),
-			num_with_unit(self.xps),
+			"{:15} | casts: {:4} | total: {:8} | crit: {:5} | xps: {:8.} | max: {:?}",
+			trim_to_n(&self.name, 15),
+			self.casts,
+			self.total,
+			format!("{}%", crit),
+			self.xps,
 			self.max_cast().unwrap_or(("n/a".to_string(), 0)),
 		)
+	}
+}
+
+fn trim_to_n(s: &String, n: usize) -> String {
+	if s.len() <= n {
+		s.into()
+	} else {
+		format!("{}...", &s[..n - 3])
 	}
 }
 
@@ -152,7 +160,7 @@ impl Encounter {
 			v.last_mut().unwrap()
 		};
 		process(m);
-		v.sort_by(|a, b| b.xps.total_cmp(&a.xps))
+		v.sort_by(|a, b| b.xps.0.total_cmp(&a.xps.0))
 	}
 }
 

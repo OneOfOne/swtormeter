@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+use core::fmt;
+use std::{
+	collections::HashMap,
+	ops::{AddAssign, Div, Mul},
+};
 
 pub fn extract_num(p: &str, l: char, r: char, right: bool) -> u64 {
 	if right {
@@ -36,7 +40,7 @@ pub fn extract_until(p: &str, r: char) -> &str {
 	}
 }
 
-pub fn num_with_unit(n: f64) -> String {
+fn num_with_unit(n: f64) -> String {
 	if n > 1_000_000. {
 		format!("{:.02}M", n / 1_000_000.)
 	} else if n > 1_000. {
@@ -45,6 +49,50 @@ pub fn num_with_unit(n: f64) -> String {
 		format!("{:.02}", n)
 	}
 }
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NumWithUnit(pub f64);
+
+impl fmt::Display for NumWithUnit {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		let n = num_with_unit(self.0).trim_end_matches(".00").to_owned();
+		if let Some(w) = f.width() {
+			write!(f, "{:w$}", n)
+		} else {
+			write!(f, "{:.3}", n)
+		}
+	}
+}
+
+impl Mul for NumWithUnit {
+	type Output = Self;
+
+	fn mul(self, rhs: Self) -> Self::Output {
+		NumWithUnit(self.0 * rhs.0)
+	}
+}
+
+impl Div for NumWithUnit {
+	type Output = Self;
+
+	fn div(self, rhs: Self) -> Self::Output {
+		NumWithUnit(self.0 / rhs.0)
+	}
+}
+
+impl AddAssign for NumWithUnit {
+	fn add_assign(&mut self, rhs: Self) {
+		self.0 += rhs.0
+	}
+}
+
+// impl Deref for NumWithUnit {
+// 	type Target = f64;
+//
+// 	fn deref(&self) -> &Self::Target {
+// 		&self.0
+// 	}
+// }
 
 #[derive(Debug, Clone, Default)]
 pub struct IdMap<'a> {
