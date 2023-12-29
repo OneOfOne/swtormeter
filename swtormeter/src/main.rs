@@ -2,6 +2,7 @@ use std::{
 	error::Error,
 	io,
 	sync::{Arc, Mutex, MutexGuard},
+	time::Duration,
 };
 
 use crossterm::{
@@ -117,13 +118,15 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 	loop {
 		terminal.draw(|f| ui(f, &mut app))?;
 
-		if let Event::Key(key) = event::read()? {
-			if key.kind == KeyEventKind::Press {
-				match key.code {
-					KeyCode::Char('q') => return Ok(()),
-					KeyCode::Down | KeyCode::Char('j') => app.next(),
-					KeyCode::Up | KeyCode::Char('k') => app.previous(),
-					_ => {}
+		if event::poll(Duration::from_millis(100))? {
+			if let Event::Key(key) = event::read()? {
+				if key.kind == KeyEventKind::Press {
+					match key.code {
+						KeyCode::Char('q') => return Ok(()),
+						KeyCode::Down | KeyCode::Char('j') => app.next(),
+						KeyCode::Up | KeyCode::Char('k') => app.previous(),
+						_ => {}
+					}
 				}
 			}
 		}
@@ -204,4 +207,3 @@ fn make_table(name: String, vec: MutexGuard<Vec<Vec<String>>>) -> Table {
 	.highlight_symbol(">> ");
 	t
 }
-
