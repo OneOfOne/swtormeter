@@ -1,18 +1,8 @@
-[package]
+[workspace]
+members = ["swtormeter", "swtorlib"]
+resolver = "2"
+
+[workspace.package]
 name = "swtormeter"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-chrono = { version = "0.4.31", features = ["std"], default-features = false }
-tokio = { version = "1.35.1", features = ["tokio-macros", "sync", "io-std", "macros", "io-util", "fs", "rt-multi-thread", "full"] }
-
-[lib]
-name = "swparser"
-path = "src/lib.rs"
-
-[[bin]]
-name = "swtormeter"
-path = "src/bin.rs"

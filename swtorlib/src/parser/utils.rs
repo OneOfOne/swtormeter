@@ -52,7 +52,12 @@ fn num_with_unit(n: f64) -> String {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NumWithUnit(pub f64);
-
+impl NumWithUnit {
+	pub fn to_string(&self) -> String {
+		let n = num_with_unit(self.0).trim_end_matches(".00").to_owned();
+		n
+	}
+}
 impl fmt::Display for NumWithUnit {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let n = num_with_unit(self.0).trim_end_matches(".00").to_owned();

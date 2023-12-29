@@ -1,7 +1,7 @@
 use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::ops::{Sub};
+use std::ops::Sub;
 
 use super::utils::NumWithUnit;
 use super::*;
@@ -49,6 +49,17 @@ impl Meter {
 		} else {
 			None
 		}
+	}
+
+	pub fn to_vec(&self) -> Vec<String> {
+		let crit = NumWithUnit(100.) * (self.crits / self.casts);
+		vec![
+			trim_to_n(&self.name, 15),
+			self.casts.to_string(),
+			self.total.to_string(),
+			format!("{}%", crit.to_string()),
+			self.xps.to_string(),
+		]
 	}
 }
 
@@ -161,6 +172,21 @@ impl Encounter {
 		};
 		process(m);
 		v.sort_by(|a, b| b.xps.0.total_cmp(&a.xps.0))
+	}
+
+	pub fn dmg_to_vec(&self) -> Vec<Vec<String>> {
+		let mut all = Vec::new();
+		for m in &self.dmg {
+			all.push(m.to_vec());
+		}
+		all
+	}
+	pub fn heal_to_vec(&self) -> Vec<Vec<String>> {
+		let mut all = Vec::new();
+		for m in &self.heal {
+			all.push(m.to_vec());
+		}
+		all
 	}
 }
 

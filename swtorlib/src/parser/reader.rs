@@ -17,11 +17,11 @@ impl Reader {
 	pub async fn parse(fp: &str) -> std::io::Result<Receiver<Line>> {
 		let name = &fp[fp.find("combat_").unwrap() + 7..fp.find(".txt").unwrap()];
 		let (start, _) = NaiveDateTime::parse_and_remainder(name, "%Y-%m-%d_%H_%M").unwrap();
-		dbg!(start);
+		//dbg!(start);
 
 		let (tx, rx) = channel::<Line>(8);
 		let mut f = File::open(fp).await?;
-		_ = f.seek(SeekFrom::End(0)).await?;
+		//_ = f.seek(SeekFrom::End(0)).await?;
 
 		//self.f.replace(Arc::new(f));
 		tokio::spawn(Self::process(tx, f));
