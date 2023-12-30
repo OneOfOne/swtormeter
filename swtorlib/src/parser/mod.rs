@@ -45,12 +45,18 @@ pub async fn parse<F: Fn(&Encounter)>(dir: &str, process: F) -> std::io::Result<
 	Ok(())
 }
 
+pub static BASE_COMBATLOGS_DIR: &'static str =
+	"/Documents/Star Wars - The Old Republic/CombatLogs/";
+
 pub fn logs_path() -> Option<String> {
+	let home = dirs_next::home_dir().unwrap().display().to_string();
 	let dir = if let Ok(dir) = std::env::var("LOGS_PATH") {
 		dir
+	} else if home.starts_with('/') {
+		home + "/.local/share/Steam/steamapps/compatdata/1286830/pfx/drive_c/users/steamuser"
+			+ BASE_COMBATLOGS_DIR
 	} else {
-		std::env::var("HOME").unwrap() +
-		"/.local/share/Steam/steamapps/compatdata/1286830/pfx/drive_c/users/steamuser/Documents/Star Wars - The Old Republic/CombatLogs/"
+		home + BASE_COMBATLOGS_DIR
 	};
 
 	if let Ok(m) = std::fs::metadata(&dir) {

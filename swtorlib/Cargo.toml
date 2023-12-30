@@ -7,13 +7,5 @@ edition = "2021"
 
 [dependencies]
 chrono = { version = "0.4.31", features = ["std"], default-features = false }
-tokio = { version = "1.35.1", features = [
-	"tokio-macros",
-	"sync",
-	"io-std",
-	"macros",
-	"io-util",
-	"fs",
-	"rt-multi-thread",
-	"full",
-] }
+dirs-next = "2"
+tokio = { version = "1", features = ["full"] }
