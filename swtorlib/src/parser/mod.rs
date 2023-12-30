@@ -23,9 +23,6 @@ use metadata::*;
 pub mod reader;
 use reader::*;
 
-pub mod value;
-use value::*;
-
 pub mod utils;
 
 pub async fn parse<F: Fn(&Encounter)>(dir: &str, process: F) -> std::io::Result<()> {
@@ -35,7 +32,7 @@ pub async fn parse<F: Fn(&Encounter)>(dir: &str, process: F) -> std::io::Result<
 		.collect();
 	paths.sort();
 
-	let path = paths.get(paths.len() - 1).unwrap();
+	let path = paths.get(paths.len() - 2).unwrap();
 	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
 	// println!("loaded {}", name);
 

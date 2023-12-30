@@ -1,6 +1,13 @@
 use super::*;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Heal {
+	pub total: i32,
+	pub effective: i32,
+	pub critical: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Value {
 	Charges(i32),
 
@@ -21,11 +28,7 @@ pub enum Value {
 	Threat(i32),
 	Reflected(i32),
 
-	Heal {
-		total: i32,
-		effective: i32,
-		critical: bool,
-	},
+	Heal(Heal),
 
 	#[default]
 	None,
@@ -33,6 +36,7 @@ pub enum Value {
 
 impl Value {
 	pub fn new<'a>(p: &'a str, act: &Action) -> Self {
+		dbg!(p);
 		let parts = p
 			.split(' ')
 			.map(|p| p.trim_matches(|c| c == '(' || c == ')'));
@@ -76,7 +80,7 @@ impl Value {
 			}
 		}
 
-		match act.effect.id {
+		match act {
 			EffectIDs::MODIFY_THREAT => Value::Threat(threat),
 			EffectIDs::HEAL => Value::Heal {
 				total,

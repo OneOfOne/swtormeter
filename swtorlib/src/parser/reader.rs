@@ -14,12 +14,12 @@ use super::Line;
 pub struct Reader;
 
 impl Reader {
-	pub async fn parse(fp: &str) -> std::io::Result<Receiver<Line>> {
+	pub async fn parse<'a>(fp: &str) -> std::io::Result<Receiver<Line>> {
 		let name = &fp[fp.find("combat_").unwrap() + 7..fp.find(".txt").unwrap()];
 		let (start, _) = NaiveDateTime::parse_and_remainder(name, "%Y-%m-%d_%H_%M").unwrap();
 		//dbg!(start);
 
-		let (tx, rx) = channel::<Line>(8);
+		let (tx, rx) = channel::<Line<'a>>(8);
 		let mut f = File::open(fp).await?;
 		//_ = f.seek(SeekFrom::End(0)).await?;
 
@@ -29,7 +29,7 @@ impl Reader {
 		Ok(rx)
 	}
 
-	async fn process(tx: Sender<Line>, f: File) {
+	async fn process(tx: Sender<Line<'a>>, f: File) {
 		let mut buf = Vec::with_capacity(1024);
 		loop {
 			let f = f.try_clone().await.unwrap();
@@ -39,10 +39,11 @@ impl Reader {
 					break;
 				}
 				// the log uses a weird encoding
-				let s: &String = &buf.iter().map(|&c| c as char).collect();
+				let s: String = buf.iter().map(|&c| c as char).collect();
 				if !s.ends_with('\n') {
 					break;
 				}
+				let s = &s.clone();
 				for ss in s.trim().lines() {
 					if let Some(l) = Line::new(ss.trim()) {
 						tx.send(l).await.unwrap();
@@ -50,7 +51,7 @@ impl Reader {
 				}
 				buf.clear();
 			}
-			sleep(Duration::from_millis(500)).await;
+			return sleep(Duration::from_millis(500)).await;
 		}
 	}
 }

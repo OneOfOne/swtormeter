@@ -91,6 +91,12 @@ impl AddAssign for NumWithUnit {
 	}
 }
 
+impl Into<f64> for NumWithUnit {
+	fn into(self) -> f64 {
+		self.0
+	}
+}
+
 // impl Deref for NumWithUnit {
 // 	type Target = f64;
 //
@@ -98,17 +104,3 @@ impl AddAssign for NumWithUnit {
 // 		&self.0
 // 	}
 // }
-
-#[derive(Debug, Clone, Default)]
-pub struct IdMap<'a> {
-	m: HashMap<u64, &'a str>,
-}
-
-impl<'a> IdMap<'a> {
-	pub fn get(&self, v: u64) -> &'a str {
-		self.m.get(&v).unwrap_or(&"<unknown>")
-	}
-	pub fn get_or_set<F: Fn() -> &'a str>(&mut self, v: u64, name: F) -> &'a str {
-		self.m.entry(v).or_insert(name())
-	}
-}

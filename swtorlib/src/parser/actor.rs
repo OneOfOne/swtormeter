@@ -29,25 +29,24 @@ impl Position {
 }
 
 #[derive(Debug, Clone, Default, Eq, Hash, PartialEq)]
-pub enum ActorType {
+pub enum ActorType<'a> {
 	#[default]
 	Player,
 	NPC,
-	Companion(Metadata),
+	Companion(NamedID<'a>),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
-pub struct Actor {
-	pub id: u64,
-	pub name: String,
-	pub typ: ActorType,
+pub struct Actor<'a> {
+	pub id: NamedID<'a>,
+	pub typ: ActorType<'a>,
 	//pub local_player: bool,
 	pub health: i32,
 	pub max_health: i32,
 	// pub pos: Position,
 }
 
-impl Actor {
+impl<'a> Actor<'a> {
 	pub fn new(p: &str) -> Option<Self> {
 		if p.is_empty() || p == "=" {
 			return None;
@@ -59,7 +58,7 @@ impl Actor {
 		let mut typ = ActorType::Player;
 		if let Some(idx) = name.find('#') {
 			id = if let Some(sidx) = name.rfind('/') {
-				typ = ActorType::Companion(Metadata::new(&name[sidx + 1..]));
+				typ = ActorType::Companion(NamedID::new(&name[sidx + 1..]));
 				name[idx + 1..sidx].parse().unwrap()
 			} else {
 				name[idx + 1..].parse().unwrap()
@@ -82,13 +81,16 @@ impl Actor {
 			.map(|v| v.parse::<i32>().unwrap_or(0));
 
 		Some(Actor {
-			id,
+			id: NamedID { id, name },
 			typ,
-			name: name.into(),
 			// local_player: false,
 			health: health.next().unwrap(),
 			max_health: health.next().unwrap(),
 			//pos,
 		})
+	}
+
+	pub fn is_full_health(&self) -> bool {
+		self.health == self.max_health
 	}
 }

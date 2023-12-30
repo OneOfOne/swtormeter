@@ -1,26 +1,30 @@
-use super::{Action, Actor, Metadata, Value};
+use super::{Action, Actor, NamedID};
 
 use chrono::NaiveTime;
 
 #[derive(Debug, Clone, Default)]
-pub struct Line {
+pub struct Line<'a> {
 	pub ts: NaiveTime,
-	pub source: Option<Actor>,
-	pub target: Option<Actor>,
-	pub ability: Metadata,
-	pub action: Action,
-	pub value: Value,
+	pub source: Option<Actor<'a>>,
+	pub target: Option<Actor<'a>>,
+	pub action: Action<'a>,
+	//pub value: Value,
 }
-impl Line {
-	pub fn new<'a>(l: &'a str) -> Option<Self> {
+
+impl<'a> Line<'a> {
+	pub fn new(l: &str) -> Option<Self> {
+		let l = l.replace("[HIDDEN]", "");
 		let mut parts = l.splitn(6, ']').map(|s| s.trim().trim_start_matches('['));
-		let ts = NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f").expect(l);
+		let ts =
+			NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f").expect(l.as_str());
 
 		let source = Actor::new(parts.next().unwrap());
 		let target = Actor::new(parts.next().unwrap());
-		let ability = Metadata::new(parts.next().unwrap());
-		let action = Action::new(parts.next().unwrap(), ':');
-		let value = Value::new(parts.next().unwrap(), &action);
+		let ability = NamedID::new(parts.next().unwrap());
+		let act = parts.next().unwrap();
+		let val = parts.next().unwrap();
+		let action = Action::new(act, val, ability, target);
+		// let value = Value::new(parts.next().unwrap(), &action);
 
 		// dbg!(l, action);
 		// dbg!(&parts[5]);
@@ -28,9 +32,8 @@ impl Line {
 			ts,
 			source,
 			target,
-			ability,
 			action,
-			value,
+			//value,
 		})
 	}
 }
