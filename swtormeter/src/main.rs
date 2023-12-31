@@ -15,7 +15,7 @@ use swtorlib::{parse, parser::logs_path};
 
 #[derive(Default)]
 struct App {
-	state: TableState,
+	states: Vec<TableState>,
 	hps: Arc<Mutex<Vec<Vec<String>>>>,
 	dps: Arc<Mutex<Vec<Vec<String>>>>,
 	area: Arc<Mutex<String>>,
@@ -23,18 +23,27 @@ struct App {
 }
 
 impl App {
+	fn new() -> Self {
+		let states = vec![TableState::default(), TableState::default()];
+		Self {
+			states,
+			..Self::default()
+		}
+	}
 	pub fn next(&mut self) {
-		// let i = match self.state.selected() {
-		// 	Some(i) => {
-		// 		if i >= self.items.len() - 1 {
-		// 			0
-		// 		} else {
-		// 			i + 1
-		// 		}
-		// 	}
-		// 	None => 0,
-		// };
-		// self.state.select(Some(i));
+		dbg!(&self.states[0]);
+		let i = match self.states[0].selected() {
+			Some(i) => {
+				let its = self.hps.clone().lock().unwrap().len();
+				if i >= its - 1 {
+					0
+				} else {
+					i + 1
+				}
+			}
+			None => 0,
+		};
+		self.states[0].select(Some(i));
 	}
 
 	pub fn previous(&mut self) {
@@ -62,7 +71,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 	let mut terminal = Terminal::new(backend)?;
 
 	// create app and run it
-	let app = App::default();
+	let app = App::new();
 	let mut hps = app.hps.clone();
 	let mut dps = app.dps.clone();
 	let mut area = app.area.clone();
@@ -134,6 +143,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 }
 
 fn ui(f: &mut Frame, app: &mut App) {
+	let (main_area, areas) = calculate_layout(f.size());
+
 	let rects = Layout::default()
 		.constraints([
 			Constraint::Percentage(10),
@@ -159,19 +170,41 @@ fn ui(f: &mut Frame, app: &mut App) {
 		.style(Style::default().fg(Color::Gray))
 		.block(create_block(app.area.lock().unwrap().clone()))
 		.wrap(Wrap { trim: true });
-	f.render_widget(paragraph, rects[0]);
+	f.render_widget(paragraph, main_area);
 
 	let t = {
 		let vec = app.hps.lock().unwrap();
 		make_table("Healing".to_owned(), vec)
 	};
-	f.render_stateful_widget(t, rects[1], &mut app.state);
+	f.render_stateful_widget(t, rects[1], &mut app.states[0]);
 
 	let t = {
 		let vec = app.dps.lock().unwrap();
 		make_table("Damage".to_owned(), vec)
 	};
-	f.render_stateful_widget(t, rects[2], &mut app.state);
+	f.render_stateful_widget(t, rects[2], &mut app.states[1]);
+}
+
+fn calculate_layout(area: Rect) -> (Rect, Vec<Vec<Rect>>) {
+	let layout = Layout::default()
+		.direction(Direction::Vertical)
+		.constraints([Constraint::Length(4), Constraint::Min(0)])
+		.split(area);
+	let title_area = layout[0];
+	let main_areas = Layout::default()
+		.direction(Direction::Vertical)
+		.constraints([Constraint::Percentage(50); 6])
+		.split(layout[1])
+		.iter()
+		.map(|&area| {
+			Layout::default()
+				.direction(Direction::Horizontal)
+				.constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+				.split(area)
+				.to_vec()
+		})
+		.collect();
+	(title_area, main_areas)
 }
 
 fn make_table(name: String, vec: MutexGuard<Vec<Vec<String>>>) -> Table {
@@ -195,11 +228,11 @@ fn make_table(name: String, vec: MutexGuard<Vec<Vec<String>>>) -> Table {
 		rows,
 		[
 			Constraint::Percentage(15),
-			Constraint::Percentage(7),
-			Constraint::Percentage(7),
-			Constraint::Percentage(7),
-			Constraint::Percentage(7),
-			Constraint::Percentage(50),
+			Constraint::Percentage(6),
+			Constraint::Percentage(6),
+			Constraint::Percentage(6),
+			Constraint::Percentage(6),
+			Constraint::Percentage(60),
 		],
 	)
 	.header(header)

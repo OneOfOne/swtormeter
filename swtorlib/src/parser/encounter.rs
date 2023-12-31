@@ -40,8 +40,11 @@ impl Meter {
 
 	pub fn spells(&self) -> Vec<String> {
 		let mut vec = self.spells.iter().collect::<Vec<_>>();
-		vec.sort_by(|(_, a), (_, b)| a.cmp(b));
-		vec.iter().map(|(n, v)| format!("{} ({})", n, v)).collect()
+		vec.sort_by(|(_, a), (_, b)| b.cmp(a));
+		vec.iter()
+			.map(|(n, v)| format!("{} ({:01})", n, NumWithUnit(**v as f64)))
+			.take(3)
+			.collect()
 	}
 
 	pub fn to_vec(&self) -> Vec<String> {
