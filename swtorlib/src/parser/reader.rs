@@ -140,7 +140,7 @@ pub fn latest_log(dir: &str) -> std::io::Result<(String, String)> {
 		.collect();
 	paths.sort();
 
-	let path = paths.get(paths.len() - 2).unwrap();
+	let path = paths.get(paths.len() - 1).unwrap();
 	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
 
 	Ok((path.to_owned(), name.to_owned()))
