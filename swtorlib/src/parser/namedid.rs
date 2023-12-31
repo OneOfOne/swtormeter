@@ -1,12 +1,12 @@
 use crate::parser::utils::*;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
-pub struct NamedID<'a> {
+pub struct NamedID {
 	pub id: u64,
-	pub name: &'a str,
+	pub name: String,
 }
 
-impl<'a> NamedID<'a> {
+impl NamedID {
 	pub fn new(p: &str) -> Self {
 		let id = extract_num(p, '{', '}', false);
 		let name = extract_until(p, '{').trim();
@@ -18,20 +18,15 @@ impl<'a> NamedID<'a> {
 	}
 }
 
-impl<'a> Into<u64> for NamedID<'a> {
+impl Into<u64> for NamedID {
 	fn into(self) -> u64 {
 		self.id
 	}
 }
 
-impl<'a> Into<String> for NamedID<'a> {
+impl Into<String> for NamedID {
 	fn into(self) -> String {
 		self.name.into()
 	}
 }
 
-impl<'a> Into<&'a str> for NamedID<'a> {
-	fn into(self) -> &'a str {
-		self.name
-	}
-}

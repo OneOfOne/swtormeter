@@ -1,8 +1,8 @@
-use crate::parser::{consts::*, metadata::NamedID};
+use crate::parser::{consts::*, namedid::NamedID};
 
 use super::actor::Actor;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Hash, Default)]
 pub enum DamageKind {
 	Energy,
 	Kinetic,
@@ -38,89 +38,82 @@ impl DamageKind {
 }
 
 #[derive(Debug, Clone)]
-pub struct Heal<'a> {
-	pub ability: NamedID<'a>,
-	pub value: i32,
-	pub effective: i32,
-	pub critical: bool,
+pub struct Discipline {
+	class: NamedID,
+	spec: NamedID,
 }
 
-#[derive(Debug, Clone)]
-pub struct EffectAbility<'a> {
-	effect: NamedID<'a>,
-	ability: NamedID<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Other<'a> {
-	event: NamedID<'a>,
-	effect: NamedID<'a>,
-	ability: NamedID<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Discipline<'a> {
-	class: NamedID<'a>,
-	spec: NamedID<'a>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub enum Action<'a> {
-	AreaEntered(NamedID<'a>),
+#[derive(Debug, Clone, Hash, Default)]
+pub enum Action {
+	AreaEntered(NamedID),
 	EnterCombat,
 	ExitCombat,
 
-	DisciplineChanged(Discipline<'a>),
+	DisciplineChanged {
+		class: NamedID,
+		spec: NamedID,
+	},
 
-	TargetSet(NamedID<'a>),
+	TargetSet(NamedID),
 	TargetCleared,
 
-	AbilityActivate(NamedID<'a>),
-	AbilityDeactivate(NamedID<'a>),
+	AbilityActivate(NamedID),
+	AbilityDeactivate(NamedID),
 
-	ModifyThreat(NamedID<'a>, i32),
-	ModifyCharges(NamedID<'a>),
+	ModifyThreat(NamedID, i32),
+	ModifyCharges(NamedID),
 
 	Spend,
 	Restore,
 
-	Stunned(NamedID<'a>),
+	Stunned(NamedID),
 
-	ApplyEffect(EffectAbility<'a>),
-	RemoveEffect(EffectAbility<'a>),
+	ApplyEffect(NamedID),
+	RemoveEffect(NamedID),
 
 	Damage {
 		kind: DamageKind,
-		ability: NamedID<'a>,
+		ability: NamedID,
 		value: i32,
 		absorbed: i32,
 		shielded: bool,
 		reflected: bool,
 		critical: bool,
 	},
+
 	Heal {
-		ability: NamedID<'a>,
+		ability: NamedID,
 		value: i32,
 		effective: i32,
 		critical: bool,
 	},
 
-	Other(Other<'a>),
+	Other {
+		event: NamedID,
+		effect: NamedID,
+		ability: NamedID,
+	},
 
 	#[default]
 	None,
 }
 
-impl<'a> Action<'a> {
-	pub fn new(act: &'a str, val: &'a str, ability: NamedID, dst: Option<Actor>) -> Self {
+impl Action {
+	pub fn new(act: &str, val: &str, ability: NamedID, dst: &Option<Actor>) -> Self {
 		let mut parts = act.splitn(2, ':');
 		let event = NamedID::new(parts.next().unwrap());
 		let neffect = parts.next().unwrap();
 		let effect = NamedID::new(neffect);
-		let val = value::new(val);
+		let val = Value::from(val);
 
-		dbg!(val);
-
+		//dbg!(&val);
+		let is_max_health = move || -> bool {
+			if let Some(dst) = dst {
+				dst.is_full_health()
+			} else {
+				false
+			}
+		};
 		match event.id {
 			SPEND => Self::Spend,
 			RESTORE => Self::Restore,
@@ -130,7 +123,7 @@ impl<'a> Action<'a> {
 				let mut parts = neffect.split('/');
 				let class = NamedID::new(parts.next().unwrap());
 				let spec = NamedID::new(parts.next().unwrap());
-				Self::DisciplineChanged(Discipline { class, spec })
+				Self::DisciplineChanged { class, spec }
 			}
 
 			AREA_ENTERED => Self::AreaEntered(effect), // AreaEntered
@@ -140,7 +133,7 @@ impl<'a> Action<'a> {
 				ENTER_COMBAT => Self::EnterCombat,
 				EXIT_COMBAT => Self::ExitCombat,
 
-				TARGET_SET => Self::TargetSet(dst.unwrap().id),
+				TARGET_SET => Self::TargetSet(dst.clone().unwrap().id),
 				TARGET_CLEARED => Self::TargetCleared,
 
 				ABILITY_ACTIVATE => Self::AbilityActivate(ability),
@@ -148,11 +141,11 @@ impl<'a> Action<'a> {
 
 				MODIFY_THREAT => Self::ModifyThreat(ability, val.threat),
 
-				_ => Self::Other(Other {
+				_ => Self::Other {
 					ability,
 					event,
 					effect,
-				}),
+				},
 			},
 
 			MODIFY_CHARGES => Self::ModifyCharges(effect),
@@ -164,7 +157,7 @@ impl<'a> Action<'a> {
 					value: val.total,
 					effective: if val.tilde != 0 {
 						val.tilde
-					} else if dst.unwrap().is_full_health() {
+					} else if is_max_health() {
 						0
 					} else {
 						val.total
@@ -187,27 +180,22 @@ impl<'a> Action<'a> {
 					Self::Stunned(ability)
 				}
 
-				_ => Self::ApplyEffect(EffectAbility { effect, ability }),
+				_ => Self::ApplyEffect(effect),
 			},
 
-			REMOVE_EFFECT => Self::RemoveEffect(EffectAbility { effect, ability }),
+			REMOVE_EFFECT => Self::RemoveEffect(effect),
 
-			_ => {
-				match effect.id {
-					_ => {}
-				}
-				Self::Other(Other {
-					ability,
-					effect,
-					event,
-				})
-			}
+			_ => Self::Other {
+				ability,
+				effect,
+				event,
+			},
 		}
 	}
 }
 
 #[derive(Debug, Clone)]
-struct value {
+struct Value {
 	value_id: u64,
 	total: i32,
 	absorbed: i32,
@@ -218,9 +206,8 @@ struct value {
 	reflected: bool,
 }
 
-impl value {
-	fn new(p: &str) -> Self {
-		dbg!(p);
+impl Value {
+	fn from(p: &str) -> Self {
 		let parts = p
 			.split(' ')
 			.map(|p| p.trim_matches(|c| c == '(' || c == ')'));

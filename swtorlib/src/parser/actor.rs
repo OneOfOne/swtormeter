@@ -12,6 +12,7 @@ pub struct Position {
 	pub z: f64,
 	pub dir: Direction,
 }
+
 impl Position {
 	pub fn new(p: &str) -> Self {
 		//dbg!(p);
@@ -29,24 +30,25 @@ impl Position {
 }
 
 #[derive(Debug, Clone, Default, Eq, Hash, PartialEq)]
-pub enum ActorType<'a> {
+pub enum ActorType {
 	#[default]
 	Player,
 	NPC,
-	Companion(NamedID<'a>),
+	Companion(NamedID),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Default)]
-pub struct Actor<'a> {
-	pub id: NamedID<'a>,
-	pub typ: ActorType<'a>,
+pub struct Actor {
+	pub id: NamedID,
+	pub typ: ActorType,
 	//pub local_player: bool,
 	pub health: i32,
 	pub max_health: i32,
-	// pub pos: Position,
+
+	pos: String,
 }
 
-impl<'a> Actor<'a> {
+impl Actor {
 	pub fn new(p: &str) -> Option<Self> {
 		if p.is_empty() || p == "=" {
 			return None;
@@ -71,7 +73,7 @@ impl<'a> Actor<'a> {
 		};
 
 		// let pos = Position::new(parts.next().unwrap());
-		_ = parts.next().unwrap();
+		let pos = parts.next().unwrap().to_owned();
 
 		let mut health = parts
 			.next()
@@ -81,16 +83,23 @@ impl<'a> Actor<'a> {
 			.map(|v| v.parse::<i32>().unwrap_or(0));
 
 		Some(Actor {
-			id: NamedID { id, name },
+			id: NamedID {
+				id,
+				name: name.into(),
+			},
 			typ,
 			// local_player: false,
 			health: health.next().unwrap(),
 			max_health: health.next().unwrap(),
-			//pos,
+			pos,
 		})
 	}
 
 	pub fn is_full_health(&self) -> bool {
 		self.health == self.max_health
+	}
+
+	pub fn position(&self) -> Position {
+		Position::new(self.pos.as_str())
 	}
 }

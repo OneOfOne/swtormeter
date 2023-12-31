@@ -1,39 +1,75 @@
 use chrono::NaiveDateTime;
+use tokio::sync::Mutex;
 
-use std::io::SeekFrom;
+use std::fs::read_dir;
+use std::io::{Result, SeekFrom};
+use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-
 use tokio::time::sleep;
 
 use super::Line;
 
-#[derive(Debug, Clone)]
 pub struct Reader;
-
 impl Reader {
-	pub async fn parse<'a>(fp: &str) -> std::io::Result<Receiver<Line>> {
-		let name = &fp[fp.find("combat_").unwrap() + 7..fp.find(".txt").unwrap()];
-		let (start, _) = NaiveDateTime::parse_and_remainder(name, "%Y-%m-%d_%H_%M").unwrap();
-		//dbg!(start);
+	pub async fn process_dir(dir: &str) -> Result<Receiver<Line>> {
+		//let name = &fp[fp.find("combat_").unwrap() + 7..fp.find(".txt").unwrap()];
 
-		let (tx, rx) = channel::<Line<'a>>(8);
-		let mut f = File::open(fp).await?;
-		//_ = f.seek(SeekFrom::End(0)).await?;
+		let (tx, rx) = channel::<Line>(8);
+		// let mut f = File::open(fp).await?;
+		// if seek_to_end {
+		// 	_ = f.seek(SeekFrom::End(0)).await?;
+		// }
 
 		//self.f.replace(Arc::new(f));
-		tokio::spawn(Self::process(tx, f));
+
+		let dir = dir.to_owned();
+		let fpath: Arc<Mutex<String>> = Arc::default();
+		let mut fp = fpath.clone();
+		tokio::spawn(async move { Self::watch_dir(dir.to_owned(), fp).await });
+		let mut fp = fpath.clone();
+		tokio::spawn(async move { Self::process(tx, fp).await });
 
 		Ok(rx)
 	}
 
-	async fn process(tx: Sender<Line<'a>>, f: File) {
-		let mut buf = Vec::with_capacity(1024);
+	async fn watch_dir(dir: String, ff: Arc<Mutex<String>>) {
 		loop {
-			let f = f.try_clone().await.unwrap();
-			let mut rd = BufReader::new(f);
+			let (fp, _) = latest_log(dir.as_str()).unwrap();
+			*ff.lock().await = fp;
+			sleep(Duration::from_secs(10)).await
+		}
+	}
+
+	async fn process(tx: Sender<Line>, ff: Arc<Mutex<String>>) {
+		let mut buf = Vec::with_capacity(1024);
+		let mut fname: Option<String> = None;
+		let mut f: Option<File> = None;
+		loop {
+			{
+				if let fp = ff.lock().await {
+					if !fp.is_empty() {
+						let fp = fp.clone();
+						if fname.is_none() || fname.clone().unwrap() != fp {
+							fname = Some(fp.clone());
+							f = Some(File::open(fp.clone()).await.unwrap());
+						}
+					}
+				}
+				if f.is_none() {
+					sleep(Duration::from_secs(1)).await;
+					continue;
+				}
+			}
+
+			let ff = f.take().unwrap();
+			let ffc = ff.try_clone().await.unwrap();
+			f.replace(ff);
+
+			let mut rd = BufReader::new(ffc);
 			while let Ok(ln) = rd.read_until(b'\n', &mut buf).await {
 				if ln == 0 {
 					break;
@@ -51,7 +87,61 @@ impl Reader {
 				}
 				buf.clear();
 			}
-			return sleep(Duration::from_millis(500)).await;
+			sleep(Duration::from_millis(500)).await
 		}
 	}
+}
+
+pub async fn parse(fp: &str) -> std::io::Result<Receiver<Line>> {
+	let name = &fp[fp.find("combat_").unwrap() + 7..fp.find(".txt").unwrap()];
+	let (start, _) = NaiveDateTime::parse_and_remainder(name, "%Y-%m-%d_%H_%M").unwrap();
+	//dbg!(start);
+
+	let (tx, rx) = channel::<Line>(8);
+	let mut f = File::open(fp).await?;
+	//_ = f.seek(SeekFrom::End(0)).await?;
+
+	//self.f.replace(Arc::new(f));
+	tokio::spawn(process(tx, f));
+
+	Ok(rx)
+}
+
+async fn process(tx: Sender<Line>, f: File) {
+	let mut buf = Vec::with_capacity(1024);
+	loop {
+		let f = f.try_clone().await.unwrap();
+		let mut rd = BufReader::new(f);
+		while let Ok(ln) = rd.read_until(b'\n', &mut buf).await {
+			if ln == 0 {
+				break;
+			}
+			// the log uses a weird encoding
+			let s: String = buf.iter().map(|&c| c as char).collect();
+			if !s.ends_with('\n') {
+				break;
+			}
+			let s = &s.clone();
+			for ss in s.trim().lines() {
+				if let Some(l) = Line::new(ss.trim()) {
+					tx.send(l).await.unwrap();
+				}
+			}
+			buf.clear();
+		}
+		return sleep(Duration::from_millis(500)).await;
+	}
+}
+
+pub fn latest_log(dir: &str) -> std::io::Result<(String, String)> {
+	let paths = read_dir(dir)?;
+	let mut paths: Vec<_> = paths
+		.map(|p| p.unwrap().path().display().to_string())
+		.collect();
+	paths.sort();
+
+	let path = paths.get(paths.len() - 2).unwrap();
+	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
+
+	Ok((path.to_owned(), name.to_owned()))
 }

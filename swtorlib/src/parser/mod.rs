@@ -8,8 +8,6 @@ use action::*;
 
 pub mod actor;
 use actor::*;
-pub mod consts;
-use consts::*;
 
 pub mod encounter;
 use encounter::*;
@@ -17,29 +15,18 @@ use encounter::*;
 pub mod line;
 use line::*;
 
-pub mod metadata;
-use metadata::*;
+pub mod namedid;
+use namedid::*;
 
+pub mod consts;
 pub mod reader;
-use reader::*;
-
 pub mod utils;
 
 pub async fn parse<F: Fn(&Encounter)>(dir: &str, process: F) -> std::io::Result<()> {
-	let paths = read_dir(dir)?;
-	let mut paths: Vec<_> = paths
-		.map(|p| p.unwrap().path().display().to_string())
-		.collect();
-	paths.sort();
-
-	let path = paths.get(paths.len() - 2).unwrap();
-	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
-	// println!("loaded {}", name);
-
-	let mut rx = Reader::parse(path.as_str()).await?;
-	let mut enc = Encounters::new(name);
-	enc.process(&mut rx, process).await;
-	Ok(())
+	let mut rx = reader::Reader::process_dir(dir).await.unwrap();
+	let mut enc = Encounters::new();
+	let h = enc.process(&mut rx, process).await;
+	Ok(h)
 }
 
 pub static BASE_COMBATLOGS_DIR: &'static str =

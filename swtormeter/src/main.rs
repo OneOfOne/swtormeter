@@ -177,7 +177,7 @@ fn ui(f: &mut Frame, app: &mut App) {
 fn make_table(name: String, vec: MutexGuard<Vec<Vec<String>>>) -> Table {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
-	let header_cells = ["name", "# casts", "total", "crit %", "xps"]
+	let header_cells = ["name", "# casts", "total", "crit %", "xps", "top spells"]
 		.iter()
 		.map(|h| Cell::from(*h).style(Style::default().fg(Color::Black)));
 	let header = Row::new(header_cells).style(normal_style).height(1);
@@ -195,10 +195,11 @@ fn make_table(name: String, vec: MutexGuard<Vec<Vec<String>>>) -> Table {
 		rows,
 		[
 			Constraint::Percentage(15),
-			Constraint::Percentage(10),
-			Constraint::Percentage(10),
-			Constraint::Percentage(10),
-			Constraint::Percentage(10),
+			Constraint::Percentage(7),
+			Constraint::Percentage(7),
+			Constraint::Percentage(7),
+			Constraint::Percentage(7),
+			Constraint::Percentage(50),
 		],
 	)
 	.header(header)
