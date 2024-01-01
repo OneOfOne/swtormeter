@@ -102,4 +102,18 @@ impl Actor {
 	pub fn position(&self) -> Position {
 		Position::new(self.pos.as_str())
 	}
+
+	pub fn is_player(&self) -> bool {
+		match self.typ {
+			ActorType::Player => true,
+			_ => false,
+		}
+	}
+
+	pub fn is_npc(&self) -> bool {
+		match self.typ {
+			ActorType::NPC => true,
+			_ => false,
+		}
+	}
 }

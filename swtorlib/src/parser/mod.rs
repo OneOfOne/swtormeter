@@ -18,6 +18,8 @@ use line::*;
 pub mod namedid;
 use namedid::*;
 
+pub mod actor_stats;
+
 pub mod consts;
 pub mod reader;
 pub mod utils;
@@ -62,21 +64,22 @@ mod tests {
 		parse(logs_path().unwrap().as_str(), |enc| {
 			//print!("{esc}c{esc}c", esc = 27 as char);
 			println!("area: {}\n", enc.area);
-			println!(
-				"npcs: {}\n",
-				enc.npcs.clone().drain().collect::<Vec<String>>().join(", ")
-			);
-			println!("----- hps -----\n");
-
-			for v in enc.heal.clone() {
-				println!("{}", &v);
-			}
-
-			println!("\n----- dps -----\n");
-
-			for v in enc.dmg.clone() {
-				println!("{}", &v);
-			}
+			println!("{:?}", enc.heals_out());
+			// println!(
+			// 	"npcs: {}\n",
+			// 	enc.npcs.clone().drain().collect::<Vec<String>>().join(", ")
+			// );
+			// println!("----- hps -----\n");
+			//
+			// for v in enc.heal.clone() {
+			// 	println!("{}", &v);
+			// }
+			//
+			// println!("\n----- dps -----\n");
+			//
+			// for v in enc.dmg.clone() {
+			// 	println!("{}", &v);
+			// }
 		})
 		.await
 		.unwrap();

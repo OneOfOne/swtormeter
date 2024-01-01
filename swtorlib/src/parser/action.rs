@@ -54,7 +54,7 @@ pub enum Action {
 		spec: NamedID,
 	},
 
-	TargetSet(NamedID),
+	TargetSet,
 	TargetCleared,
 
 	AbilityActivate(NamedID),
@@ -66,7 +66,11 @@ pub enum Action {
 	Spend,
 	Restore,
 
+	Death,
+
 	Stunned(NamedID),
+
+	Interrupted(NamedID),
 
 	ApplyEffect(NamedID),
 	RemoveEffect(NamedID),
@@ -86,6 +90,11 @@ pub enum Action {
 		value: i32,
 		effective: i32,
 		critical: bool,
+	},
+
+	Event {
+		ability: NamedID,
+		effect: NamedID,
 	},
 
 	Other {
@@ -114,6 +123,7 @@ impl Action {
 				false
 			}
 		};
+
 		match event.id {
 			SPEND => Self::Spend,
 			RESTORE => Self::Restore,
@@ -133,19 +143,19 @@ impl Action {
 				ENTER_COMBAT => Self::EnterCombat,
 				EXIT_COMBAT => Self::ExitCombat,
 
-				TARGET_SET => Self::TargetSet(dst.clone().unwrap().id),
+				TARGET_SET => Self::TargetSet,
 				TARGET_CLEARED => Self::TargetCleared,
 
 				ABILITY_ACTIVATE => Self::AbilityActivate(ability),
 				ABILITY_DEACTIVATE => Self::AbilityDeactivate(ability),
 
+				ABILITY_INTERRUPT => Self::Interrupted(ability),
+
+				DEATH => Self::Death,
+
 				MODIFY_THREAT => Self::ModifyThreat(ability, val.threat),
 
-				_ => Self::Other {
-					ability,
-					event,
-					effect,
-				},
+				_ => Self::Event { ability, effect },
 			},
 
 			MODIFY_CHARGES => Self::ModifyCharges(effect),

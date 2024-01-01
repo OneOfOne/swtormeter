@@ -1,111 +1,29 @@
-use chrono::NaiveTime;
+use chrono::{Duration, NaiveDate, NaiveTime};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops::Sub;
+use std::sync::Arc;
 
-use super::utils::NumWithUnit;
+use super::actor_stats::{ActorStats, Meter};
+use super::utils::fmt_num;
 use super::*;
-
-#[derive(Debug, Clone, Default)]
-pub struct Meter {
-	pub name: String,
-
-	pub casts: NumWithUnit,
-	pub total: NumWithUnit,
-	pub crits: NumWithUnit,
-	pub xps: NumWithUnit,
-
-	pub spells: HashMap<String, i32>,
-}
-
-impl Meter {
-	pub fn new(name: String) -> Self {
-		Self {
-			name,
-			..Self::default()
-		}
-	}
-
-	pub fn update(&mut self, spell: &str, value: i32, crit: bool, seconds: i64) {
-		self.casts += NumWithUnit(1.);
-		self.total += NumWithUnit(value as f64);
-		if crit {
-			self.crits += NumWithUnit(1.);
-		}
-		self.xps = self.total / NumWithUnit(seconds as f64);
-
-		let max = self.spells.entry(spell.into()).or_insert(0);
-		*max += value;
-	}
-
-	pub fn spells(&self) -> Vec<String> {
-		let mut vec = self.spells.iter().collect::<Vec<_>>();
-		vec.sort_by(|(_, a), (_, b)| b.cmp(a));
-		vec.iter()
-			.map(|(n, v)| format!("{} ({:01})", n, NumWithUnit(**v as f64)))
-			.take(3)
-			.collect()
-	}
-
-	pub fn to_vec(&self) -> Vec<String> {
-		let crit = NumWithUnit(100.) * (self.crits / self.casts);
-		vec![
-			self.name.clone(),
-			self.casts.to_string(),
-			self.total.to_string(),
-			format!("{}%", crit.to_string()),
-			self.xps.to_string(),
-			self.spells().join(", "),
-		]
-	}
-}
-
-impl fmt::Display for Meter {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let crit = NumWithUnit(100.) * (self.crits / self.casts);
-		write!(
-			f,
-			"{:15} | casts: {:4} | total: {:8} | crit: {:5} | xps: {:8.} | max: {:?}",
-			&self.name,
-			self.casts,
-			self.total,
-			format!("{}%", crit),
-			self.xps,
-			"" //self.max_cast().unwrap_or(("n/a".to_string(), 0)),
-		)
-	}
-}
-
-fn trim_to_n(s: &String, n: usize) -> String {
-	if s.len() <= n {
-		s.into()
-	} else {
-		format!("{}...", &s[..n - 3])
-	}
-}
-
-pub struct Meters {
-	taken: HashMap<String, Meter>,
-	given: HashMap<String, Meter>,
-	avoided: u64,
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct Encounter {
 	pub area: String,
 	pub start: NaiveTime,
+	pub ts: NaiveTime,
 	pub end: NaiveTime,
 
 	//pub lines: Vec<Line>,
-	pub npcs: HashSet<String>,
-	pub heal: Vec<Meter>,
-	pub dmg: Vec<Meter>,
+	pub players: HashMap<NamedID, ActorStats>,
+	pub npcs: HashMap<NamedID, ActorStats>,
 }
 
 impl Encounter {
 	pub fn append(&mut self, l: &Line) -> bool {
 		//self.lines.push(l.clone());
-		match l.action {
+		match &l.action {
 			Action::EnterCombat => {
 				self.start = l.ts;
 				return false;
@@ -116,77 +34,92 @@ impl Encounter {
 				return false;
 			}
 
-			_ => {}
-		}
+			_ => {
+				self.ts = l.ts;
+			}
+		};
 
 		if let Some(ref src) = l.source {
-			let name = match src.typ {
-				ActorType::Player => src.id.name.clone(),
-				ActorType::Companion(ref m) => format!("{} ({})", m.name, src.id.name),
-				ActorType::NPC => {
-					self.npcs.insert(src.id.name.clone());
-					return false;
-				}
+			let astats = if src.is_npc() {
+				self.npcs
+					.entry(src.id.clone())
+					.or_insert_with(|| ActorStats::new(src.id.clone()))
+			} else {
+				self.players
+					.entry(src.id.clone())
+					.or_insert_with(|| ActorStats::new(src.id.clone()))
 			};
 
-			match l.action {
-				Action::Heal {
-					ref ability,
-					value: v,
-					effective: e,
-					critical: c,
-					..
-				} => {
-					Self::update(&mut self.heal, name.to_string(), |m| {
-						let val = if e > 0 { e } else { v };
-						m.update(&ability.name, val, c, l.ts.sub(self.start).num_seconds());
-					});
-					return true;
-				}
-				Action::Damage {
-					ref ability,
-					value: v,
-					critical: c,
-					..
-				} => {
-					Self::update(&mut self.dmg, name.into(), |m| {
-						m.update(&ability.name, v, c, l.ts.sub(self.start).num_seconds());
-					});
-					return true;
-				}
-
-				_ => {}
-			}
+			astats.update(&l.source, &l.target, &l.action)
 		}
 
-		false
+		if let Some(ref dst) = l.target {
+			let astats = if dst.is_npc() {
+				self.npcs
+					.entry(dst.id.clone())
+					.or_insert_with(|| ActorStats::new(dst.id.clone()))
+			} else {
+				self.players
+					.entry(dst.id.clone())
+					.or_insert_with(|| ActorStats::new(dst.id.clone()))
+			};
+
+			astats.update(&l.source, &l.target, &l.action)
+		}
+
+		true
 	}
 
-	fn update<F: FnMut(&mut Meter) -> ()>(v: &mut Vec<Meter>, name: String, mut process: F) {
-		let m = if let Some(i) = v.iter().position(|m| m.name == name) {
-			&mut v[i]
+	pub fn get_vec_for<F: Fn(&ActorStats) -> Meter>(
+		m: &HashMap<NamedID, ActorStats>,
+		elapsed: i64,
+		fn_: F,
+	) -> Vec<((Vec<String>, f64))> {
+		let mut hm = m
+			.iter()
+			.map(|(_, v)| {
+				let m = fn_(v);
+				let xps = m.xps(elapsed);
+				let o = vec![
+					format!("{} ({})", v.id.name, v.spec.name),
+					fmt_num(m.casts as f64),
+					fmt_num(m.total as f64),
+					fmt_num((m.crits as f64 / m.casts as f64) * 100.) + "%",
+					fmt_num(xps),
+				];
+				(o, xps)
+			})
+			.collect::<Vec<_>>();
+		hm.sort_by(|(_, a), (_, b)| b.total_cmp(&a));
+		hm
+	}
+
+	pub fn heals_out(&self) -> Vec<((Vec<String>, f64))> {
+		let elapsed = self.elapsed().num_seconds();
+		Self::get_vec_for(&self.players, elapsed, ActorStats::all_heal_out)
+	}
+
+	pub fn dmg_out(&self) -> Vec<((Vec<String>, f64))> {
+		let elapsed = self.elapsed().num_seconds();
+		Self::get_vec_for(&self.players, elapsed, ActorStats::all_dmg_out)
+	}
+
+	pub fn heals_in(&self) -> Vec<((Vec<String>, f64))> {
+		let elapsed = self.elapsed().num_seconds();
+		Self::get_vec_for(&self.players, elapsed, ActorStats::all_heal_in)
+	}
+
+	pub fn dmg_in(&self) -> Vec<((Vec<String>, f64))> {
+		let elapsed = self.elapsed().num_seconds();
+		Self::get_vec_for(&self.players, elapsed, ActorStats::all_dmg_in)
+	}
+
+	pub fn elapsed(&self) -> Duration {
+		if self.end != NaiveTime::MIN {
+			self.end.sub(self.start)
 		} else {
-			v.push(Meter::new(name));
-			v.last_mut().unwrap()
-		};
-		process(m);
-		v.sort_by(|a, b| b.xps.0.total_cmp(&a.xps.0))
-	}
-
-	pub fn dmg_to_vec(&self) -> Vec<Vec<String>> {
-		let mut all = Vec::new();
-		for m in &self.dmg {
-			all.push(m.to_vec());
+			self.ts.sub(self.start)
 		}
-		all
-	}
-
-	pub fn heal_to_vec(&self) -> Vec<Vec<String>> {
-		let mut all = Vec::new();
-		for m in &self.heal {
-			all.push(m.to_vec());
-		}
-		all
 	}
 }
 
@@ -219,7 +152,7 @@ impl Encounters {
 
 				Action::ExitCombat => {
 					if ln > 0 {
-						let e = self.all.get_mut(ln - 1).unwrap();
+						let mut e = self.all.get_mut(ln - 1).unwrap();
 						e.append(&l);
 						process(e);
 					}

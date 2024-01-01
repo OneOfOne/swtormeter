@@ -1,4 +1,14 @@
+use std::{cell::OnceCell, collections::HashMap, rc::Rc, sync::Mutex};
+
 use crate::parser::utils::*;
+
+// fn id_cache() -> &'static Mutex<HashMap<&str, Rc<NamedID>>> {
+// 	static INSTANCE: OnceCell<Mutex<HashMap<&str, Rc<NamedID>>>> = OnceCell::new();
+// 	INSTANCE.get_or_init(|| {
+// 		let m = HashMap::new();
+// 		Mutex::new(m)
+// 	})
+// }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct NamedID {
@@ -29,4 +39,3 @@ impl Into<String> for NamedID {
 		self.name.into()
 	}
 }
-
