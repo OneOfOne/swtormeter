@@ -64,7 +64,7 @@ mod tests {
 		parse(logs_path().unwrap().as_str(), |enc| {
 			//print!("{esc}c{esc}c", esc = 27 as char);
 			println!("area: {}\n", enc.area);
-			println!("{:?}", enc.heals_out());
+			println!("{:?}", enc.heals_in());
 			// println!(
 			// 	"npcs: {}\n",
 			// 	enc.npcs.clone().drain().collect::<Vec<String>>().join(", ")

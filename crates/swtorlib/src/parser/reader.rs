@@ -57,7 +57,7 @@ impl Reader {
 						let fp = fp.clone();
 						if fname.is_none() || fname.clone().unwrap() != fp {
 							fname = Some(fp.clone());
-							f = Some(File::open(fp.clone()).await.unwrap());
+							f.replace(File::open(fp.clone()).await.unwrap());
 						}
 					}
 				}
@@ -69,7 +69,6 @@ impl Reader {
 
 			let ff = f.take().unwrap();
 			let ffc = ff.try_clone().await.unwrap();
-			f.replace(ff);
 
 			let mut rd = BufReader::new(ffc);
 			while let Ok(ln) = rd.read_until(b'\n', &mut buf).await {
@@ -101,7 +100,7 @@ pub fn latest_log(dir: &str) -> std::io::Result<(String, String)> {
 		.collect();
 	paths.sort();
 
-	let path = paths.get(paths.len() - 1).unwrap();
+	let path = paths.get(paths.len() - 2).unwrap();
 	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
 
 	Ok((path.to_owned(), name.to_owned()))

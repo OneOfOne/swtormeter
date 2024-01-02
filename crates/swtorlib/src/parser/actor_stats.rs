@@ -2,7 +2,11 @@ use std::ops::{AddAssign, Sub};
 
 use chrono::NaiveTime;
 
-use super::{action::Action, actor::Actor, namedid::NamedID};
+use super::{
+	action::Action,
+	actor::{Actor, ActorType},
+	namedid::NamedID,
+};
 
 #[derive(Debug, Clone, Default, Hash, PartialEq)]
 pub struct Meter {
@@ -123,14 +127,21 @@ impl ActorStats {
 
 				let m = &mut self.dmg_total;
 				m.update(*value, *critical);
-				let (dm, sm) = if src.clone().is_some_and(|src| src.id == self.id) {
+				let (dm, sm) = if src.clone().is_some_and(|src| src.get_id() == self.id) {
 					(&mut self.dmg_out, &mut self.spells_out)
 				} else {
 					(&mut self.dmg_in, &mut self.spells_in)
 				};
-
-				let dst = dst.clone().unwrap();
-				Self::update_meter(dm, dst.id, |m| m.update(*value, *critical));
+				let id = if let Some(dst) = dst {
+					dst.get_id()
+				} else if let Some(src) = src {
+					src.get_id()
+				} else {
+					NamedID::default()
+				};
+				if id.id > 0 {
+					Self::update_meter(dm, id, |m| m.update(*value, *critical));
+				}
 				Self::update_meter(sm, ability.clone(), |m| m.update(*value, *critical));
 			}
 			Action::Heal {
@@ -147,16 +158,16 @@ impl ActorStats {
 				m.update(*value, *critical);
 				let src = src.clone().unwrap();
 
-				let (dm, sm) = if src.id == self.id {
+				let (dm, sm) = if src.get_id() == self.id {
 					(&mut self.heal_out, &mut self.spells_out)
 				} else {
 					(&mut self.heal_in, &mut self.spells_in)
 				};
 
 				let id = if let Some(dst) = dst {
-					dst.id.clone()
+					dst.get_id()
 				} else {
-					src.id.clone()
+					src.get_id()
 				};
 				Self::update_meter(dm, id, |m| m.update(*value, *critical));
 				Self::update_meter(sm, ability.clone(), |m| m.update(*value, *critical));

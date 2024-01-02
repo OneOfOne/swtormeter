@@ -35,33 +35,50 @@ impl Encounter {
 			}
 
 			_ => {
+				if self.start == NaiveTime::MIN {
+					return false;
+				}
 				self.ts = l.ts;
 			}
 		};
 
 		if let Some(ref src) = l.source {
+			let id = match src.typ {
+				ActorType::Player | ActorType::NPC => src.id.clone(),
+				ActorType::Companion(ref n) => NamedID {
+					id: n.id,
+					name: format!("{} ({})", n.name, src.id.name),
+				},
+			};
 			let astats = if src.is_npc() {
 				self.npcs
-					.entry(src.id.clone())
-					.or_insert_with(|| ActorStats::new(src.id.clone()))
+					.entry(id.clone())
+					.or_insert_with(|| ActorStats::new(id))
 			} else {
 				self.players
-					.entry(src.id.clone())
-					.or_insert_with(|| ActorStats::new(src.id.clone()))
+					.entry(id.clone())
+					.or_insert_with(|| ActorStats::new(id))
 			};
-
+			//dbg!(&astats);
 			astats.update(&l.source, &l.target, &l.action)
 		}
 
 		if let Some(ref dst) = l.target {
+			let id = match dst.typ {
+				ActorType::Player | ActorType::NPC => dst.id.clone(),
+				ActorType::Companion(ref n) => NamedID {
+					id: n.id,
+					name: format!("{} ({})", n.name, dst.id.name),
+				},
+			};
 			let astats = if dst.is_npc() {
 				self.npcs
-					.entry(dst.id.clone())
-					.or_insert_with(|| ActorStats::new(dst.id.clone()))
+					.entry(id.clone())
+					.or_insert_with(|| ActorStats::new(id))
 			} else {
 				self.players
-					.entry(dst.id.clone())
-					.or_insert_with(|| ActorStats::new(dst.id.clone()))
+					.entry(id.clone())
+					.or_insert_with(|| ActorStats::new(id))
 			};
 
 			astats.update(&l.source, &l.target, &l.action)
@@ -81,7 +98,11 @@ impl Encounter {
 				let m = fn_(v);
 				let xps = m.xps(elapsed);
 				let o = vec![
-					format!("{} ({})", v.id.name, v.spec.name),
+					if v.spec.id != 0 {
+						format!("{} ({})", v.id.name, v.spec.name)
+					} else {
+						v.id.name.clone()
+					},
 					fmt_num(m.casts as f64),
 					fmt_num(m.total as f64),
 					fmt_num((m.crits as f64 / m.casts as f64) * 100.) + "%",

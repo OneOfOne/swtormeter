@@ -556,7 +556,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "swtormeter-bin"
+name = "swtormeter"
 version = "0.1.0"
 dependencies = [
  "crossterm",

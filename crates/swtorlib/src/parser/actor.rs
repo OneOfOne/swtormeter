@@ -109,11 +109,27 @@ impl Actor {
 			_ => false,
 		}
 	}
+	pub fn is_companion(&self) -> bool {
+		match self.typ {
+			ActorType::Companion(_) => true,
+			_ => false,
+		}
+	}
 
 	pub fn is_npc(&self) -> bool {
 		match self.typ {
 			ActorType::NPC => true,
 			_ => false,
+		}
+	}
+
+	pub fn get_id(&self) -> NamedID {
+		match self.typ {
+			ActorType::Player | ActorType::NPC => self.id.clone(),
+			ActorType::Companion(ref n) => NamedID {
+				id: n.id,
+				name: format!("{} ({})", n.name, self.id.name),
+			},
 		}
 	}
 }
