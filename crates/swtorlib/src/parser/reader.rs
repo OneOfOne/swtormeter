@@ -1,13 +1,12 @@
-use chrono::NaiveDateTime;
 use tokio::sync::Mutex;
 
 use std::fs::read_dir;
-use std::io::{Result, SeekFrom};
+use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, AsyncSeekExt, BufReader};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::time::sleep;
 
@@ -28,9 +27,9 @@ impl Reader {
 
 		let dir = dir.to_owned();
 		let fpath: Arc<Mutex<String>> = Arc::default();
-		let mut fp = fpath.clone();
+		let fp = fpath.clone();
 		tokio::spawn(async move { Self::watch_dir(dir.to_owned(), fp).await });
-		let mut fp = fpath.clone();
+		let fp = fpath.clone();
 		tokio::spawn(async move { Self::process(tx, fp).await });
 
 		Ok(rx)
@@ -52,15 +51,15 @@ impl Reader {
 		let mut f: Option<File> = None;
 		loop {
 			{
-				if let fp = ff.lock().await {
-					if !fp.is_empty() {
-						let fp = fp.clone();
-						if fname.is_none() || fname.clone().unwrap() != fp {
-							fname = Some(fp.clone());
-							f.replace(File::open(fp.clone()).await.unwrap());
-						}
+				let fp = ff.lock().await;
+				if !fp.is_empty() {
+					let fp = fp.clone();
+					if fname.is_none() || fname.clone().unwrap() != fp {
+						fname = Some(fp.clone());
+						f = Some(File::open(fp.clone()).await.unwrap());
 					}
 				}
+
 				if f.is_none() {
 					sleep(Duration::from_secs(1)).await;
 					continue;
@@ -69,6 +68,7 @@ impl Reader {
 
 			let ff = f.take().unwrap();
 			let ffc = ff.try_clone().await.unwrap();
+			f.replace(ff);
 
 			let mut rd = BufReader::new(ffc);
 			while let Ok(ln) = rd.read_until(b'\n', &mut buf).await {
@@ -100,7 +100,7 @@ pub fn latest_log(dir: &str) -> std::io::Result<(String, String)> {
 		.collect();
 	paths.sort();
 
-	let path = paths.get(paths.len() - 2).unwrap();
+	let path = paths.get(paths.len() - 1).unwrap();
 	let name = Path::new(&path).file_name().unwrap().to_str().unwrap();
 
 	Ok((path.to_owned(), name.to_owned()))

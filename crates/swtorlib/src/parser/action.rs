@@ -37,12 +37,6 @@ impl DamageKind {
 	}
 }
 
-#[derive(Debug, Clone)]
-pub struct Discipline {
-	class: NamedID,
-	spec: NamedID,
-}
-
 #[derive(Debug, Clone, Hash, Default)]
 pub enum Action {
 	AreaEntered(NamedID),
@@ -79,6 +73,7 @@ pub enum Action {
 		kind: DamageKind,
 		ability: NamedID,
 		value: i32,
+		effective: i32,
 		absorbed: i32,
 		shielded: bool,
 		reflected: bool,
@@ -180,6 +175,7 @@ impl Action {
 
 					ability,
 					value: val.total,
+					effective: val.tilde,
 					absorbed: val.absorbed,
 					shielded: val.shielded,
 					reflected: val.reflected,

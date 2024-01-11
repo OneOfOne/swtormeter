@@ -45,5 +45,5 @@ pub const DEATH: u64 = 836045448945493;
 pub const APPLY_EFFECT: u64 = 836045448945477;
 pub const REMOVE_EFFECT: u64 = 836045448945478;
 
-pub const SHIELD_STR: &'static str = "{836045448945509}";
-pub const REFLECTED_STR: &'static str = "{836045448953649}";
+pub const SHIELD_STR: &str = "{836045448945509}";
+pub const REFLECTED_STR: &str = "{836045448953649}";

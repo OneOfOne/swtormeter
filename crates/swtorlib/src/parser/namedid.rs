@@ -1,5 +1,3 @@
-use std::{cell::OnceCell, collections::HashMap, rc::Rc, sync::Mutex};
-
 use crate::parser::utils::*;
 
 // fn id_cache() -> &'static Mutex<HashMap<&str, Rc<NamedID>>> {
@@ -28,14 +26,14 @@ impl NamedID {
 	}
 }
 
-impl Into<u64> for NamedID {
-	fn into(self) -> u64 {
-		self.id
+impl From<NamedID> for u64 {
+	fn from(val: NamedID) -> Self {
+		val.id
 	}
 }
 
-impl Into<String> for NamedID {
-	fn into(self) -> String {
-		self.name.into()
+impl From<NamedID> for String {
+	fn from(val: NamedID) -> Self {
+		val.name
 	}
 }

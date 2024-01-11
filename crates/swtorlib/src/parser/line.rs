@@ -8,15 +8,15 @@ pub struct Line {
 	pub source: Option<Actor>,
 	pub target: Option<Actor>,
 	pub action: Action,
-	//pub value: Value,
 }
 
 impl Line {
 	pub fn new(l: &str) -> Option<Self> {
+		// println!("{}", l);
 		let l = l.replace("[HIDDEN]", "");
 		let mut parts = l.splitn(6, ']').map(|s| s.trim().trim_start_matches('['));
-		let ts =
-			NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f").expect(l.as_str());
+		let ts = NaiveTime::parse_from_str(parts.next().unwrap(), "%H:%M:%S.%3f")
+			.unwrap_or_else(|_| panic!("{}", l));
 
 		let source = Actor::new(parts.next().unwrap());
 		let target = Actor::new(parts.next().unwrap());
@@ -33,7 +33,6 @@ impl Line {
 			source,
 			target,
 			action,
-			//value,
 		})
 	}
 }

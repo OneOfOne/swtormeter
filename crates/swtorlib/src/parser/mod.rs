@@ -1,6 +1,3 @@
-use std::{fs::read_dir, path::Path};
-
-use chrono::NaiveDateTime;
 use tokio::sync::mpsc::Receiver;
 
 pub mod action;
@@ -24,15 +21,14 @@ pub mod consts;
 pub mod reader;
 pub mod utils;
 
-pub async fn parse<F: Fn(&Encounter)>(dir: &str, process: F) -> std::io::Result<()> {
+pub async fn parse<F: Fn(&Encounter, &Line)>(dir: &str, process: F) -> std::io::Result<()> {
 	let mut rx = reader::Reader::process_dir(dir).await.unwrap();
 	let mut enc = Encounters::new();
 	let h = enc.process(&mut rx, process).await;
 	Ok(h)
 }
 
-pub static BASE_COMBATLOGS_DIR: &'static str =
-	"/Documents/Star Wars - The Old Republic/CombatLogs/";
+pub static BASE_COMBATLOGS_DIR: &str = "/Documents/Star Wars - The Old Republic/CombatLogs/";
 
 pub fn logs_path() -> Option<String> {
 	let home = dirs_next::home_dir().unwrap().display().to_string();
@@ -61,10 +57,11 @@ mod tests {
 	#[tokio::test]
 	async fn parse_test() {
 		dbg!(logs_path());
-		parse(logs_path().unwrap().as_str(), |enc| {
+		parse(logs_path().unwrap().as_str(), |enc, l| {
 			//print!("{esc}c{esc}c", esc = 27 as char);
-			println!("area: {}\n", enc.area);
-			println!("{:?}", enc.heals_in());
+			println!("area: {}", enc.area);
+			println!("line: {:?}", l);
+			//println!("{:?}", enc.heals_in());
 			// println!(
 			// 	"npcs: {}\n",
 			// 	enc.npcs.clone().drain().collect::<Vec<String>>().join(", ")

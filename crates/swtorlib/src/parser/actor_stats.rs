@@ -1,12 +1,6 @@
-use std::ops::{AddAssign, Sub};
+use std::ops::AddAssign;
 
-use chrono::NaiveTime;
-
-use super::{
-	action::Action,
-	actor::{Actor, ActorType},
-	namedid::NamedID,
-};
+use super::{action::Action, actor::Actor, namedid::NamedID};
 
 #[derive(Debug, Clone, Default, Hash, PartialEq)]
 pub struct Meter {
@@ -156,20 +150,16 @@ impl ActorStats {
 				}
 				let m = &mut self.heal_total;
 				m.update(*value, *critical);
-				let src = src.clone().unwrap();
 
-				let (dm, sm) = if src.get_id() == self.id {
+				let (dm, sm) = if src.clone().is_some_and(|src| src.get_id() == self.id) {
 					(&mut self.heal_out, &mut self.spells_out)
 				} else {
 					(&mut self.heal_in, &mut self.spells_in)
 				};
 
-				let id = if let Some(dst) = dst {
-					dst.get_id()
-				} else {
-					src.get_id()
-				};
-				Self::update_meter(dm, id, |m| m.update(*value, *critical));
+				if let Some(dst) = dst {
+					Self::update_meter(dm, dst.get_id(), |m| m.update(*value, *critical));
+				}
 				Self::update_meter(sm, ability.clone(), |m| m.update(*value, *critical));
 			}
 

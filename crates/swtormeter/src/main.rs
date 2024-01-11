@@ -82,17 +82,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 	// create app and run it
 	let app = App::new();
-	let mut hps = app.hps.clone();
-	let mut hps_in = app.hps_in.clone();
-	let mut dps = app.dps.clone();
-	let mut dps_in = app.dps_in.clone();
-	let mut area = app.area.clone();
-	let mut npcs = app.npcs.clone();
-	let mut elapsed = app.elapsed.clone();
+	let hps = app.hps.clone();
+	let hps_in = app.hps_in.clone();
+	let dps = app.dps.clone();
+	let dps_in = app.dps_in.clone();
+	let area = app.area.clone();
+	let npcs = app.npcs.clone();
+	let elapsed = app.elapsed.clone();
 	tokio::spawn(async move {
 		let dir = logs_path().unwrap();
 		//dbg!(logs_path());
-		parse(dir.as_str(), |enc| {
+		parse(dir.as_str(), |enc, _| {
 			{
 				let mut it = hps_in.lock().unwrap();
 				*it = enc.heals_in();
@@ -221,18 +221,18 @@ fn ui(f: &mut Frame, app: &mut App) {
 		make_table("Damage (2)".to_owned(), vec, app.selected == 2)
 	};
 	f.render_stateful_widget(t, areas[0][1], &mut app.states[1]);
-
-	let t = {
-		let vec = app.hps_in.lock().unwrap();
-		make_table("Healing Taken (3)".to_owned(), vec, app.selected == 3)
-	};
-	f.render_stateful_widget(t, areas[1][0], &mut app.states[0]);
-
-	let t = {
-		let vec = app.dps_in.lock().unwrap();
-		make_table("Damage Taken (4)".to_owned(), vec, app.selected == 4)
-	};
-	f.render_stateful_widget(t, areas[1][1], &mut app.states[1]);
+	//
+	// let t = {
+	// 	let vec = app.hps_in.lock().unwrap();
+	// 	make_table("Healing Taken (3)".to_owned(), vec, app.selected == 3)
+	// };
+	// f.render_stateful_widget(t, areas[1][0], &mut app.states[0]);
+	//
+	// let t = {
+	// 	let vec = app.dps_in.lock().unwrap();
+	// 	make_table("Damage Taken (4)".to_owned(), vec, app.selected == 4)
+	// };
+	// f.render_stateful_widget(t, areas[1][1], &mut app.states[1]);
 }
 
 fn calculate_layout(area: Rect) -> (Rect, Vec<Vec<Rect>>, Rect) {
@@ -246,7 +246,7 @@ fn calculate_layout(area: Rect) -> (Rect, Vec<Vec<Rect>>, Rect) {
 		.split(area);
 	let main_areas = Layout::default()
 		.direction(Direction::Vertical)
-		.constraints([Constraint::Percentage(50); 6])
+		.constraints([Constraint::Percentage(100); 4])
 		.split(layout[1])
 		.iter()
 		.map(|&area| {

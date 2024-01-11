@@ -104,23 +104,14 @@ impl Actor {
 	}
 
 	pub fn is_player(&self) -> bool {
-		match self.typ {
-			ActorType::Player => true,
-			_ => false,
-		}
+		matches!(self.typ, ActorType::Player)
 	}
 	pub fn is_companion(&self) -> bool {
-		match self.typ {
-			ActorType::Companion(_) => true,
-			_ => false,
-		}
+		matches!(self.typ, ActorType::Companion(_))
 	}
 
 	pub fn is_npc(&self) -> bool {
-		match self.typ {
-			ActorType::NPC => true,
-			_ => false,
-		}
+		matches!(self.typ, ActorType::NPC)
 	}
 
 	pub fn get_id(&self) -> NamedID {

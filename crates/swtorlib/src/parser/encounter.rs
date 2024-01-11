@@ -1,8 +1,7 @@
-use chrono::{Duration, NaiveDate, NaiveTime};
-use std::collections::{HashMap, HashSet};
-use std::fmt;
+use chrono::{Duration, NaiveTime};
+use std::collections::HashMap;
+
 use std::ops::Sub;
-use std::sync::Arc;
 
 use super::actor_stats::{ActorStats, Meter};
 use super::utils::fmt_num;
@@ -21,6 +20,13 @@ pub struct Encounter {
 }
 
 impl Encounter {
+	pub fn new(area: String) -> Self {
+		Self {
+			area,
+			..Default::default()
+		}
+	}
+
 	pub fn append(&mut self, l: &Line) -> bool {
 		//self.lines.push(l.clone());
 		match &l.action {
@@ -35,7 +41,7 @@ impl Encounter {
 			}
 
 			_ => {
-				if self.start == NaiveTime::MIN {
+				if self.end != NaiveTime::MIN {
 					return false;
 				}
 				self.ts = l.ts;
@@ -43,13 +49,7 @@ impl Encounter {
 		};
 
 		if let Some(ref src) = l.source {
-			let id = match src.typ {
-				ActorType::Player | ActorType::NPC => src.id.clone(),
-				ActorType::Companion(ref n) => NamedID {
-					id: n.id,
-					name: format!("{} ({})", n.name, src.id.name),
-				},
-			};
+			let id = src.get_id();
 			let astats = if src.is_npc() {
 				self.npcs
 					.entry(id.clone())
@@ -59,18 +59,13 @@ impl Encounter {
 					.entry(id.clone())
 					.or_insert_with(|| ActorStats::new(id))
 			};
-			//dbg!(&astats);
+
 			astats.update(&l.source, &l.target, &l.action)
 		}
 
 		if let Some(ref dst) = l.target {
-			let id = match dst.typ {
-				ActorType::Player | ActorType::NPC => dst.id.clone(),
-				ActorType::Companion(ref n) => NamedID {
-					id: n.id,
-					name: format!("{} ({})", n.name, dst.id.name),
-				},
-			};
+			let id = dst.get_id();
+
 			let astats = if dst.is_npc() {
 				self.npcs
 					.entry(id.clone())
@@ -91,7 +86,7 @@ impl Encounter {
 		m: &HashMap<NamedID, ActorStats>,
 		elapsed: i64,
 		fn_: F,
-	) -> Vec<((Vec<String>, f64))> {
+	) -> Vec<(Vec<String>, f64)> {
 		let mut hm = m
 			.iter()
 			.map(|(_, v)| {
@@ -111,26 +106,28 @@ impl Encounter {
 				(o, xps)
 			})
 			.collect::<Vec<_>>();
-		hm.sort_by(|(_, a), (_, b)| b.total_cmp(&a));
+
+		hm.sort_by(|(_, a), (_, b)| b.total_cmp(a));
+
 		hm
 	}
 
-	pub fn heals_out(&self) -> Vec<((Vec<String>, f64))> {
+	pub fn heals_out(&self) -> Vec<(Vec<String>, f64)> {
 		let elapsed = self.elapsed().num_seconds();
 		Self::get_vec_for(&self.players, elapsed, ActorStats::all_heal_out)
 	}
 
-	pub fn dmg_out(&self) -> Vec<((Vec<String>, f64))> {
+	pub fn dmg_out(&self) -> Vec<(Vec<String>, f64)> {
 		let elapsed = self.elapsed().num_seconds();
 		Self::get_vec_for(&self.players, elapsed, ActorStats::all_dmg_out)
 	}
 
-	pub fn heals_in(&self) -> Vec<((Vec<String>, f64))> {
+	pub fn heals_in(&self) -> Vec<(Vec<String>, f64)> {
 		let elapsed = self.elapsed().num_seconds();
 		Self::get_vec_for(&self.players, elapsed, ActorStats::all_heal_in)
 	}
 
-	pub fn dmg_in(&self) -> Vec<((Vec<String>, f64))> {
+	pub fn dmg_in(&self) -> Vec<(Vec<String>, f64)> {
 		let elapsed = self.elapsed().num_seconds();
 		Self::get_vec_for(&self.players, elapsed, ActorStats::all_dmg_in)
 	}
@@ -144,49 +141,47 @@ impl Encounter {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Encounters {
 	all: Vec<Encounter>,
+	curr: Option<Encounter>,
 	last_area: String,
 }
 
 impl Encounters {
 	pub fn new() -> Self {
-		Self {
-			//		start,
-			all: vec![],
-			last_area: "n/a".to_string(),
-		}
+		Self::default()
 	}
 
-	pub async fn process<F: Fn(&Encounter)>(&mut self, rx: &mut Receiver<Line>, process: F) {
+	pub async fn process<F: Fn(&Encounter, &Line)>(&mut self, rx: &mut Receiver<Line>, process: F) {
 		while let Some(l) = rx.recv().await {
-			let ln = self.all.len();
 			match l.action {
-				Action::AreaEntered(n) => self.last_area = n.name.into(),
+				Action::AreaEntered(n) => self.last_area = n.name,
+
 				Action::EnterCombat => {
-					let mut e = Encounter::default();
-					e.area = self.last_area.clone();
+					let mut e = Encounter::new(self.last_area.clone());
 					e.append(&l);
-					self.all.push(e);
+					if let Some(oe) = self.curr.replace(e) {
+						self.all.push(oe);
+					}
 				}
 
 				Action::ExitCombat => {
-					if ln > 0 {
-						let mut e = self.all.get_mut(ln - 1).unwrap();
+					if let Some(e) = &mut self.curr.take() {
 						e.append(&l);
-						process(e);
+						process(e, &l);
+						self.all.push(e.clone());
 					}
 				}
 
 				_ => {
-					if ln > 0 {
-						let e = self.all.get_mut(ln - 1).unwrap();
+					if let Some(e) = &mut self.curr {
 						if e.end != NaiveTime::MIN {
 							continue;
 						}
+
 						if e.append(&l) {
-							process(e);
+							process(e, &l);
 						}
 					}
 				}
