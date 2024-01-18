@@ -61,6 +61,7 @@ pub enum Action {
 	Restore,
 
 	Death,
+	Revived,
 
 	Stunned(NamedID),
 
@@ -147,6 +148,7 @@ impl Action {
 				ABILITY_INTERRUPT => Self::Interrupted(ability),
 
 				DEATH => Self::Death,
+				REVIVED => Self::Revived,
 
 				MODIFY_THREAT => Self::ModifyThreat(ability, val.threat),
 

@@ -75,12 +75,11 @@ impl Actor {
 		// let pos = Position::new(parts.next().unwrap());
 		let pos = parts.next().unwrap().to_owned();
 
-		let mut health = parts
-			.next()
-			.unwrap()
+		let health = parts.next().unwrap();
+		let mut health = health
 			.trim_matches(|c| c == '(' || c == ')')
 			.splitn(2, '/')
-			.map(|v| v.parse::<i32>().unwrap_or(0));
+			.map(|v| v.parse::<i32>().unwrap());
 
 		Some(Actor {
 			id: NamedID {

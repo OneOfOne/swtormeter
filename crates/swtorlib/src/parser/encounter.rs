@@ -1,11 +1,19 @@
 use chrono::{Duration, NaiveTime};
-use std::collections::HashMap;
 
 use std::ops::Sub;
 
 use super::actor_stats::{ActorStats, Meter};
+use super::sorted_vec::SortedVec;
 use super::utils::fmt_num;
 use super::*;
+
+fn new_sorted_by_health() -> SortedVec<ActorStats> {
+	SortedVec::<ActorStats>::new(|a, b| b.health.cmp(&a.health))
+}
+
+fn new_sorted_by_dmg() -> SortedVec<ActorStats> {
+	SortedVec::<ActorStats>::new(|a, b| a.dmg_total.total.cmp(&b.dmg_total.total))
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct Encounter {
@@ -15,14 +23,16 @@ pub struct Encounter {
 	pub end: NaiveTime,
 
 	//pub lines: Vec<Line>,
-	pub players: HashMap<NamedID, ActorStats>,
-	pub npcs: HashMap<NamedID, ActorStats>,
+	pub players: SortedVec<ActorStats>,
+	pub npcs: SortedVec<ActorStats>,
 }
 
 impl Encounter {
 	pub fn new(area: String) -> Self {
 		Self {
 			area,
+			players: new_sorted_by_dmg(),
+			npcs: new_sorted_by_health(),
 			..Default::default()
 		}
 	}
@@ -50,48 +60,48 @@ impl Encounter {
 
 		if let Some(ref src) = l.source {
 			let id = src.get_id();
-			let astats = if src.is_npc() {
-				self.npcs
-					.entry(id.clone())
-					.or_insert_with(|| ActorStats::new(id))
+			let v = if src.is_npc() {
+				&mut self.npcs
 			} else {
-				self.players
-					.entry(id.clone())
-					.or_insert_with(|| ActorStats::new(id))
+				&mut self.players
 			};
 
-			astats.update(&l.source, &l.target, &l.action)
+			v.update(
+				|| ActorStats::new(id.clone()),
+				|a| a.id == id,
+				|a| a.update(&l.source, &l.target, &l.action),
+			)
 		}
 
 		if let Some(ref dst) = l.target {
 			let id = dst.get_id();
-
-			let astats = if dst.is_npc() {
-				self.npcs
-					.entry(id.clone())
-					.or_insert_with(|| ActorStats::new(id))
+			let v = if dst.is_npc() {
+				&mut self.npcs
 			} else {
-				self.players
-					.entry(id.clone())
-					.or_insert_with(|| ActorStats::new(id))
+				&mut self.players
 			};
 
-			astats.update(&l.source, &l.target, &l.action)
+			v.update(
+				|| ActorStats::new(id.clone()),
+				|a| a.id == id,
+				|a| a.update(&l.source, &l.target, &l.action),
+			)
 		}
 
 		true
 	}
 
 	pub fn get_vec_for<F: Fn(&ActorStats) -> Meter>(
-		m: &HashMap<NamedID, ActorStats>,
+		m: &SortedVec<ActorStats>,
 		elapsed: i64,
 		fn_: F,
 	) -> Vec<(Vec<String>, f64)> {
 		let mut hm = m
 			.iter()
-			.map(|(_, v)| {
+			.map(|v| {
 				let m = fn_(v);
 				let xps = m.xps(elapsed);
+				let apm = m.apm(elapsed);
 				let o = vec![
 					if v.spec.id != 0 {
 						format!("{} ({})", v.id.name, v.spec.name)
@@ -101,6 +111,7 @@ impl Encounter {
 					fmt_num(m.casts as f64),
 					fmt_num(m.total as f64),
 					fmt_num((m.crits as f64 / m.casts as f64) * 100.) + "%",
+					fmt_num(apm),
 					fmt_num(xps),
 				];
 				(o, xps)
@@ -130,6 +141,51 @@ impl Encounter {
 	pub fn dmg_in(&self) -> Vec<(Vec<String>, f64)> {
 		let elapsed = self.elapsed().num_seconds();
 		Self::get_vec_for(&self.players, elapsed, ActorStats::all_dmg_in)
+	}
+
+	pub fn npc_by_health(&self, filter_bosses: bool) -> Vec<(String, i32)> {
+		let it = self.npcs.iter();
+		if filter_bosses {
+			let players_health = self.players.iter().fold(0, |v, a| v + a.health);
+			let is_boss = self
+				.npcs
+				.v
+				.first()
+				.map_or_else(|| false, |v| v.health > players_health);
+
+			if is_boss {
+				it.filter(|n| n.health > players_health)
+					.map(|v| {
+						let n = v.id.name.clone();
+						let h = v.health;
+						(n, h)
+					})
+					.collect::<Vec<_>>()
+			} else {
+				it.map(|v| {
+					let n = v.id.name.clone();
+					let h = v.health;
+					(n, h)
+				})
+				.collect::<Vec<_>>()
+			}
+		} else {
+			it.map(|v| {
+				let n = v.id.name.clone();
+				let h = v.health;
+				(n, h)
+			})
+			.collect::<Vec<_>>()
+		}
+	}
+
+	pub fn is_boss(&self) -> bool {
+		let players_health = self.players.iter().fold(0, |v, a| v + a.health);
+		if let Some(npc) = self.npcs.v.first() {
+			npc.health > players_health
+		} else {
+			false
+		}
 	}
 
 	pub fn elapsed(&self) -> Duration {

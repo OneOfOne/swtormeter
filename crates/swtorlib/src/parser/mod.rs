@@ -19,6 +19,7 @@ pub mod actor_stats;
 
 pub mod consts;
 pub mod reader;
+pub mod sorted_vec;
 pub mod utils;
 
 pub async fn parse<F: Fn(&Encounter, &Line)>(dir: &str, process: F) -> std::io::Result<()> {

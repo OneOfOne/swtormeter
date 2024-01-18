@@ -11,16 +11,20 @@ use crossterm::{
 	terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{prelude::*, widgets::*};
-use swtorlib::{parse, parser::logs_path};
+use swtorlib::{
+	parse,
+	parser::{logs_path, utils::fmt_num},
+};
 
+type LockedVec = Arc<Mutex<Vec<(Vec<String>, f64)>>>;
 #[derive(Default)]
 struct App {
 	states: Vec<TableState>,
 	selected: i32,
-	hps: Arc<Mutex<Vec<(Vec<String>, f64)>>>,
-	hps_in: Arc<Mutex<Vec<(Vec<String>, f64)>>>,
-	dps: Arc<Mutex<Vec<(Vec<String>, f64)>>>,
-	dps_in: Arc<Mutex<Vec<(Vec<String>, f64)>>>,
+	hps: LockedVec,
+	hps_in: LockedVec,
+	dps: LockedVec,
+	dps_in: LockedVec,
 	area: Arc<Mutex<String>>,
 	elapsed: Arc<Mutex<String>>,
 	npcs: Arc<Mutex<String>>,
@@ -36,13 +40,13 @@ impl App {
 		];
 		Self {
 			states,
-			selected: 1,
+			selected: 0,
 			..Self::default()
 		}
 	}
 	pub fn next(&mut self) {
-		dbg!(&self.states[0]);
-		let i = match self.states[0].selected() {
+		let st = &mut self.states[self.selected as usize];
+		let i = match st.selected() {
 			Some(i) => {
 				let its = self.hps.clone().lock().unwrap().len();
 				if i >= its - 1 {
@@ -53,7 +57,7 @@ impl App {
 			}
 			None => 0,
 		};
-		self.states[0].select(Some(i));
+		st.select(Some(i));
 	}
 
 	pub fn previous(&mut self) {
@@ -126,12 +130,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 			{
 				let mut npcs = npcs.lock().unwrap();
 				*npcs = enc
-					.npcs
-					.keys()
+					.npc_by_health(true)
 					.into_iter()
-					.map(|id| id.name.to_owned())
+					.map(|(id, v)| format!("{} ({})", id, fmt_num(v as f64)))
 					.collect::<Vec<String>>()
 					.join(", ");
+				if enc.is_boss() {
+					*npcs = format!("** {}", *npcs);
+				}
 			}
 		})
 		.await
@@ -164,10 +170,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<(
 				if key.kind == KeyEventKind::Press {
 					match key.code {
 						KeyCode::Char('q') => return Ok(()),
-						KeyCode::Char('1') => app.selected = 1,
-						KeyCode::Char('2') => app.selected = 2,
-						KeyCode::Char('3') => app.selected = 3,
-						KeyCode::Char('4') => app.selected = 4,
+						KeyCode::Char('1') => app.selected = 0,
+						KeyCode::Char('2') => app.selected = 1,
+						KeyCode::Char('3') => app.selected = 2,
+						KeyCode::Char('4') => app.selected = 3,
 						KeyCode::Down | KeyCode::Char('j') => app.next(),
 						KeyCode::Up | KeyCode::Char('k') => app.previous(),
 						_ => {}
@@ -212,13 +218,13 @@ fn ui(f: &mut Frame, app: &mut App) {
 
 	let t = {
 		let vec = app.hps.lock().unwrap();
-		make_table("Healing (1)".to_owned(), vec, app.selected == 1)
+		make_table("Healing (1)".to_owned(), vec, app.selected == 0)
 	};
 	f.render_stateful_widget(t, areas[0][0], &mut app.states[0]);
 
 	let t = {
 		let vec = app.dps.lock().unwrap();
-		make_table("Damage (2)".to_owned(), vec, app.selected == 2)
+		make_table("Damage (2)".to_owned(), vec, app.selected == 1)
 	};
 	f.render_stateful_widget(t, areas[0][1], &mut app.states[1]);
 	//
@@ -263,7 +269,7 @@ fn calculate_layout(area: Rect) -> (Rect, Vec<Vec<Rect>>, Rect) {
 fn make_table(name: String, vec: MutexGuard<Vec<(Vec<String>, f64)>>, selected: bool) -> Table {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
-	let header_cells = ["name", "# casts", "total", "crit %", "xps"]
+	let header_cells = ["name", "# casts", "total", "crit %", "apm", "xps"]
 		.iter()
 		.map(|h| Cell::from(*h).style(Style::default().fg(Color::Black)));
 	let header = Row::new(header_cells).style(normal_style).height(1);
@@ -281,7 +287,8 @@ fn make_table(name: String, vec: MutexGuard<Vec<(Vec<String>, f64)>>, selected: 
 	let t = Table::new(
 		rows,
 		[
-			Constraint::Percentage(55),
+			Constraint::Percentage(45),
+			Constraint::Percentage(10),
 			Constraint::Percentage(10),
 			Constraint::Percentage(10),
 			Constraint::Percentage(10),
