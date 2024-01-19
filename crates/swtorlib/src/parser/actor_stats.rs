@@ -1,5 +1,7 @@
 use std::ops::AddAssign;
 
+use crate::parser::utils::fmt_num;
+
 use super::{action::Action, actor::Actor, namedid::NamedID, sorted_vec::SortedVec};
 
 #[derive(Debug, Clone, Default, Hash, PartialEq)]
@@ -37,18 +39,18 @@ impl Meter {
 		(self.casts as f64 / (seconds as f64 / 60.0)) as i32 as f64
 	}
 
-	//
-	// pub fn to_vec(&self) -> Vec<String> {
-	// 	let crit = i32(100.) * (self.crits / self.casts);
-	// 	vec![
-	// 		format!("{} ({}/{})", self.name.clone(), self.class, self.spec),
-	// 		self.casts.to_string(),
-	// 		self.total.to_string(),
-	// 		format!("{}%", crit.to_string()),
-	// 		self.xps.to_string(),
-	// 		self.spells().join(", "),
-	// 	]
-	// }
+	pub fn to_vec(&self, seconds: i64) -> Vec<String> {
+		let crit = 100. * (self.crits as f64 / self.casts as f64);
+		vec![
+			self.id.name.clone(),
+			self.casts.to_string(),
+			// fmt_num(self.crit_total as f64),
+			fmt_num(self.total as f64),
+			format!("{:0.2}%", crit.to_string()),
+			fmt_num(self.apm(seconds)),
+			fmt_num(self.xps(seconds)),
+		]
+	}
 }
 
 impl AddAssign<&Meter> for Meter {
@@ -86,6 +88,7 @@ pub struct ActorStats {
 	pub spec: NamedID,
 	pub class: NamedID,
 
+	pub max_health: i32,
 	pub health: i32,
 
 	pub dmg_out: SortedVec<Meter>,
@@ -124,7 +127,7 @@ impl ActorStats {
 			Action::DisciplineChanged { class, spec } => {
 				self.class = class.clone();
 				self.spec = spec.clone();
-				self.health = src.clone().unwrap().max_health;
+				self.max_health = src.clone().unwrap().max_health;
 			}
 
 			Action::Damage {
@@ -140,6 +143,7 @@ impl ActorStats {
 				let m = &mut self.dmg_total;
 				m.update(*value, *critical);
 				let (dm, sm) = if src.clone().is_some_and(|src| src.get_id() == self.id) {
+					self.max_health = src.clone().unwrap().max_health;
 					self.health = src.clone().unwrap().health;
 					(&mut self.dmg_out, &mut self.spells_out)
 				} else {
@@ -171,6 +175,7 @@ impl ActorStats {
 				m.update(*value, *critical);
 
 				let (dm, sm) = if src.clone().is_some_and(|src| src.get_id() == self.id) {
+					self.max_health = src.clone().unwrap().max_health;
 					self.health = src.clone().unwrap().health;
 					(&mut self.heal_out, &mut self.spells_out)
 				} else {
@@ -210,12 +215,40 @@ impl ActorStats {
 		Self::all_x(&self.dmg_in, &self.id)
 	}
 
+	pub fn all_spells_out(&self) -> Meter {
+		Self::all_x(&self.spells_out, &self.id)
+	}
+
+	pub fn all_spells_in(&self) -> Meter {
+		Self::all_x(&self.spells_in, &self.id)
+	}
+
 	fn all_x(v: &SortedVec<Meter>, id: &NamedID) -> Meter {
 		let mut m = Meter::new(id.clone());
 		for mm in v.iter() {
 			m += mm;
 		}
 		m
+	}
+
+	pub fn spells_out_to_vec(&self, seconds: i64) -> Vec<(Vec<String>, f64)> {
+		Self::all_to_vec(&self.spells_out, seconds)
+	}
+
+	pub fn dmg_out_to_vec(&self, seconds: i64) -> Vec<(Vec<String>, f64)> {
+		Self::all_to_vec(&self.dmg_out, seconds)
+	}
+	pub fn heal_out_to_vec(&self, seconds: i64) -> Vec<(Vec<String>, f64)> {
+		Self::all_to_vec(&self.heal_out, seconds)
+	}
+
+	fn all_to_vec(v: &SortedVec<Meter>, seconds: i64) -> Vec<(Vec<String>, f64)> {
+		let mut out = Vec::new();
+		for mm in v.iter() {
+			out.push((mm.to_vec(seconds), mm.total as f64));
+		}
+		out.sort_by(|(_, a), (_, b)| b.total_cmp(a));
+		out
 	}
 
 	fn update_meter<F: Fn(&mut Meter)>(v: &mut SortedVec<Meter>, id: NamedID, process: F) {

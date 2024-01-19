@@ -1,10 +1,12 @@
 use std::{
+	cmp::Ordering,
 	error::Error,
 	io,
-	sync::{Arc, Mutex, MutexGuard},
+	sync::{Arc, Mutex},
 	time::Duration,
 };
 
+use chrono::NaiveTime;
 use crossterm::{
 	event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
 	execute,
@@ -13,21 +15,26 @@ use crossterm::{
 use ratatui::{prelude::*, widgets::*};
 use swtorlib::{
 	parse,
-	parser::{logs_path, utils::fmt_num},
+	parser::{encounter::Encounter, logs_path, utils::fmt_num},
 };
 
-type LockedVec = Arc<Mutex<Vec<(Vec<String>, f64)>>>;
+static XPS_HEADER: [&str; 6] = ["name", "# casts", "total", "crit %", "apm", "xps"];
+
+static XPS_COLUMN_WIDTHS: [Constraint; 6] = [
+	Constraint::Percentage(45),
+	Constraint::Percentage(10),
+	Constraint::Percentage(10),
+	Constraint::Percentage(10),
+	Constraint::Percentage(7),
+	Constraint::Percentage(10),
+];
+
 #[derive(Default)]
 struct App {
 	states: Vec<TableState>,
-	selected: i32,
-	hps: LockedVec,
-	hps_in: LockedVec,
-	dps: LockedVec,
-	dps_in: LockedVec,
-	area: Arc<Mutex<String>>,
-	elapsed: Arc<Mutex<String>>,
+	selected: usize,
 	npcs: Arc<Mutex<String>>,
+	curr: Arc<Mutex<Encounter>>,
 }
 
 impl App {
@@ -45,10 +52,10 @@ impl App {
 		}
 	}
 	pub fn next(&mut self) {
-		let st = &mut self.states[self.selected as usize];
+		let st = &mut self.states[self.selected];
 		let i = match st.selected() {
 			Some(i) => {
-				let its = self.hps.clone().lock().unwrap().len();
+				let its = self.curr.clone().lock().unwrap().players.len();
 				if i >= its - 1 {
 					0
 				} else {
@@ -61,17 +68,19 @@ impl App {
 	}
 
 	pub fn previous(&mut self) {
-		// let i = match self.state.selected() {
-		// 	Some(i) => {
-		// 		if i == 0 {
-		// 			self.items.len() - 1
-		// 		} else {
-		// 			i - 1
-		// 		}
-		// 	}
-		// 	None => 0,
-		// };
-		// self.state.select(Some(i));
+		let st = &mut self.states[self.selected];
+		let i = match st.selected() {
+			Some(i) => {
+				let its = self.curr.clone().lock().unwrap().players.len();
+				if i == 0 {
+					its - 1
+				} else {
+					i - 1
+				}
+			}
+			None => 0,
+		};
+		st.select(Some(i));
 	}
 }
 
@@ -86,45 +95,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 	// create app and run it
 	let app = App::new();
-	let hps = app.hps.clone();
-	let hps_in = app.hps_in.clone();
-	let dps = app.dps.clone();
-	let dps_in = app.dps_in.clone();
-	let area = app.area.clone();
 	let npcs = app.npcs.clone();
-	let elapsed = app.elapsed.clone();
+	let curr = app.curr.clone();
 	tokio::spawn(async move {
 		let dir = logs_path().unwrap();
-		//dbg!(logs_path());
+		//dbg!(logs_path());i
+		let last = Arc::new(Mutex::new(NaiveTime::default()));
 		parse(dir.as_str(), |enc, _| {
 			{
-				let mut it = hps_in.lock().unwrap();
-				*it = enc.heals_in();
+				let mut last = last.lock().unwrap();
+				if enc.start.cmp(&last) != Ordering::Equal {
+					*last = enc.start;
+				}
 			}
 			{
-				let mut it = dps_in.lock().unwrap();
-				*it = enc.dmg_in();
-			}
-			{
-				let mut it = hps.lock().unwrap();
-				*it = enc.heals_out();
-			}
-			{
-				let mut it = dps.lock().unwrap();
-				*it = enc.dmg_out();
-			}
-			{
-				let mut area = area.lock().unwrap();
-				*area = enc.area.clone();
-			}
-			{
-				let mut it = elapsed.lock().unwrap();
-				let el = enc.elapsed();
-				*it = format!(
-					"{:02}:{:02}m",
-					el.num_minutes(),
-					el.num_seconds() - (el.num_minutes() * 60)
-				);
+				let mut curr = curr.lock().unwrap();
+				*curr = enc.clone();
 			}
 
 			{
@@ -164,16 +150,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: App) -> io::Result<()> {
 	loop {
 		terminal.draw(|f| ui(f, &mut app))?;
+		let mut prev = 0;
+		let mut set_sel = |idx| {
+			app.selected = idx;
+			app.states[prev].select(None);
+			prev = idx;
+		};
 
-		if event::poll(Duration::from_millis(100))? {
+		if event::poll(Duration::from_millis(250))? {
 			if let Event::Key(key) = event::read()? {
 				if key.kind == KeyEventKind::Press {
 					match key.code {
 						KeyCode::Char('q') => return Ok(()),
-						KeyCode::Char('1') => app.selected = 0,
-						KeyCode::Char('2') => app.selected = 1,
-						KeyCode::Char('3') => app.selected = 2,
-						KeyCode::Char('4') => app.selected = 3,
+						KeyCode::Char('1') => set_sel(0),
+						KeyCode::Char('2') => set_sel(1),
+						KeyCode::Char('3') => set_sel(2),
+						KeyCode::Char('4') => set_sel(3),
+						KeyCode::Esc => app.states[app.selected].select(None),
 						KeyCode::Down | KeyCode::Char('j') => app.next(),
 						KeyCode::Up | KeyCode::Char('k') => app.previous(),
 						_ => {}
@@ -197,48 +190,112 @@ fn ui(f: &mut Frame, app: &mut App) {
 			))
 	};
 
-	let text = vec![Line::from(app.npcs.lock().unwrap().clone())];
+	let enc = app.curr.lock().unwrap();
 
+	let elapsed = enc.elapsed();
+
+	let text = vec![Line::from(app.npcs.lock().unwrap().clone())];
 	let paragraph = Paragraph::new(text.clone())
 		.style(Style::default().fg(Color::Gray))
-		.block(create_block(app.area.lock().unwrap().clone()))
+		.block(create_block(format!(
+			" {} (elapsed: {:02}:{:02}) ",
+			enc.area,
+			elapsed.num_minutes(),
+			elapsed.num_seconds() - (elapsed.num_minutes() * 60)
+		)))
 		.wrap(Wrap { trim: true });
 	f.render_widget(paragraph, header);
 
-	let text = vec![Line::from(format!(
-		"Elapsed: {}",
-		app.elapsed.lock().unwrap().clone()
-	))];
+	let (t, states) = {
+		let vec = match app.selected {
+			0 => enc.heals_out(),
+			1 => enc.dmg_out(),
+			_ => Vec::new(),
+		};
+		let states = if let Some(idx) = app.states[app.selected].selected() {
+			if idx >= vec.len() {
+				app.states[app.selected].select(None);
+				None
+			} else if let Some(p) = enc.player_by_name(&vec[idx].0[0]) {
+				let elps = enc.elapsed().num_seconds();
+				let x_out = match app.selected {
+					0 => p.heal_out_to_vec(elps),
+					1 => p.dmg_out_to_vec(elps),
+					_ => vec![],
+				};
+				let mut spells_out = p.spells_out_to_vec(elps);
+				spells_out.push((vec![], 0.));
+				spells_out.push((
+					vec![
+						"Other".to_owned(),
+						"value".to_owned(),
+						"value".to_owned(),
+						"-".to_owned(),
+						"-".to_owned(),
+						"-".to_owned(),
+					],
+					0.,
+				));
+				spells_out.push((vec![], 0.));
+				spells_out.push((
+					vec![
+						"Health / Max Health".to_owned(),
+						fmt_num(p.health as f64),
+						fmt_num(p.max_health as f64),
+					],
+					0.,
+				));
+				spells_out.push((vec!["# Deaths".to_owned(), fmt_num(p.deaths as f64)], 0.));
+				spells_out.push((vec!["# Revived".to_owned(), fmt_num(p.revives as f64)], 0.));
+				spells_out.push((
+					vec!["# Interrupted".to_owned(), fmt_num(p.interrupted as f64)],
+					0.,
+				));
 
-	let paragraph = Paragraph::new(text.clone())
-		.style(Style::default().fg(Color::Gray))
-		.block(create_block("Other".into()))
-		.wrap(Wrap { trim: true });
-	f.render_widget(paragraph, footer);
-
-	let t = {
-		let vec = app.hps.lock().unwrap();
-		make_table("Healing (1)".to_owned(), vec, app.selected == 0)
+				Some((
+					make_table(
+						format!(" Spells for {} ", p.id.name),
+						XPS_HEADER.as_slice(),
+						XPS_COLUMN_WIDTHS.as_slice(),
+						&spells_out,
+						false,
+					),
+					make_table(
+						format!(" Targets for {} ", p.id.name),
+						XPS_HEADER.as_slice(),
+						XPS_COLUMN_WIDTHS.as_slice(),
+						&x_out,
+						false,
+					),
+				))
+			} else {
+				None
+			}
+		} else {
+			None
+		};
+		let title = if app.selected == 0 {
+			" * Healing | Damage (2) "
+		} else {
+			" Healing (1) | * Damage "
+		};
+		(
+			make_table(
+				title.to_owned(),
+				XPS_HEADER.as_slice(),
+				XPS_COLUMN_WIDTHS.as_slice(),
+				&vec,
+				true,
+			),
+			states,
+		)
 	};
-	f.render_stateful_widget(t, areas[0][0], &mut app.states[0]);
-
-	let t = {
-		let vec = app.dps.lock().unwrap();
-		make_table("Damage (2)".to_owned(), vec, app.selected == 1)
-	};
-	f.render_stateful_widget(t, areas[0][1], &mut app.states[1]);
-	//
-	// let t = {
-	// 	let vec = app.hps_in.lock().unwrap();
-	// 	make_table("Healing Taken (3)".to_owned(), vec, app.selected == 3)
-	// };
-	// f.render_stateful_widget(t, areas[1][0], &mut app.states[0]);
-	//
-	// let t = {
-	// 	let vec = app.dps_in.lock().unwrap();
-	// 	make_table("Damage Taken (4)".to_owned(), vec, app.selected == 4)
-	// };
-	// f.render_stateful_widget(t, areas[1][1], &mut app.states[1]);
+	f.render_stateful_widget(t, areas[0][0], &mut app.states[app.selected]);
+	if let Some((spells, x_out)) = states {
+		let mut dummy = TableState::default();
+		f.render_stateful_widget(spells, areas[0][1], &mut dummy);
+		f.render_stateful_widget(x_out, footer, &mut dummy);
+	}
 }
 
 fn calculate_layout(area: Rect) -> (Rect, Vec<Vec<Rect>>, Rect) {
@@ -247,12 +304,12 @@ fn calculate_layout(area: Rect) -> (Rect, Vec<Vec<Rect>>, Rect) {
 		.constraints([
 			Constraint::Length(4),
 			Constraint::Min(0),
-			Constraint::Length(6),
+			Constraint::Length(15),
 		])
 		.split(area);
 	let main_areas = Layout::default()
 		.direction(Direction::Vertical)
-		.constraints([Constraint::Percentage(100); 4])
+		.constraints([Constraint::Percentage(100)])
 		.split(layout[1])
 		.iter()
 		.map(|&area| {
@@ -266,10 +323,16 @@ fn calculate_layout(area: Rect) -> (Rect, Vec<Vec<Rect>>, Rect) {
 	(layout[0], main_areas, layout[2])
 }
 
-fn make_table(name: String, vec: MutexGuard<Vec<(Vec<String>, f64)>>, selected: bool) -> Table {
+fn make_table<'a>(
+	name: String,
+	header: &[&'static str],
+	widths: &[Constraint],
+	vec: &[(Vec<String>, f64)],
+	selected: bool,
+) -> Table<'a> {
 	let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 	let normal_style = Style::default().bg(Color::Blue);
-	let header_cells = ["name", "# casts", "total", "crit %", "apm", "xps"]
+	let header_cells = header
 		.iter()
 		.map(|h| Cell::from(*h).style(Style::default().fg(Color::Black)));
 	let header = Row::new(header_cells).style(normal_style).height(1);
@@ -284,29 +347,19 @@ fn make_table(name: String, vec: MutexGuard<Vec<(Vec<String>, f64)>>, selected: 
 		let cells = item.0.iter().map(|c| Cell::from(c.clone()));
 		Row::new(cells).height(height as u16)
 	});
-	let t = Table::new(
-		rows,
-		[
-			Constraint::Percentage(45),
-			Constraint::Percentage(10),
-			Constraint::Percentage(10),
-			Constraint::Percentage(10),
-			Constraint::Percentage(10),
-			Constraint::Percentage(10),
-		],
-	)
-	.header(header)
-	.block(
-		Block::default()
-			.borders(Borders::ALL)
-			.border_style(if selected {
-				Style::default().fg(Color::Green)
-			} else {
-				Style::default()
-			})
-			.title(name),
-	)
-	.highlight_style(selected_style)
-	.highlight_symbol(">> ");
+	let t = Table::new(rows, widths)
+		.header(header)
+		.block(
+			Block::default()
+				.borders(Borders::ALL)
+				.border_style(if selected {
+					Style::default().fg(Color::Green)
+				} else {
+					Style::default()
+				})
+				.title(name),
+		)
+		.highlight_style(selected_style);
+	//.highlight_symbol(">");
 	t
 }

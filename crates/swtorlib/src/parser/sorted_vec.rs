@@ -42,6 +42,10 @@ impl<T: Debug> SortedVec<T> {
 	pub fn len(&self) -> usize {
 		self.v.len()
 	}
+
+	pub fn get(&self, idx: usize) -> Option<&T> {
+		Some(&self.v[idx])
+	}
 }
 
 unsafe impl<T: Debug> Send for SortedVec<T> {}

@@ -8,7 +8,7 @@ use super::utils::fmt_num;
 use super::*;
 
 fn new_sorted_by_health() -> SortedVec<ActorStats> {
-	SortedVec::<ActorStats>::new(|a, b| b.health.cmp(&a.health))
+	SortedVec::<ActorStats>::new(|a, b| b.max_health.cmp(&a.max_health))
 }
 
 fn new_sorted_by_dmg() -> SortedVec<ActorStats> {
@@ -133,6 +133,11 @@ impl Encounter {
 		Self::get_vec_for(&self.players, elapsed, ActorStats::all_dmg_out)
 	}
 
+	pub fn spells_out(&self) -> Vec<(Vec<String>, f64)> {
+		let elapsed = self.elapsed().num_seconds();
+		Self::get_vec_for(&self.players, elapsed, ActorStats::all_spells_out)
+	}
+
 	pub fn heals_in(&self) -> Vec<(Vec<String>, f64)> {
 		let elapsed = self.elapsed().num_seconds();
 		Self::get_vec_for(&self.players, elapsed, ActorStats::all_heal_in)
@@ -146,25 +151,25 @@ impl Encounter {
 	pub fn npc_by_health(&self, filter_bosses: bool) -> Vec<(String, i32)> {
 		let it = self.npcs.iter();
 		if filter_bosses {
-			let players_health = self.players.iter().fold(0, |v, a| v + a.health);
+			let players_health = self.players.iter().fold(0, |v, a| v + a.max_health);
 			let is_boss = self
 				.npcs
 				.v
 				.first()
-				.map_or_else(|| false, |v| v.health > players_health);
+				.map_or_else(|| false, |v| v.max_health > players_health);
 
 			if is_boss {
-				it.filter(|n| n.health > players_health)
+				it.filter(|n| n.max_health > players_health / 2)
 					.map(|v| {
 						let n = v.id.name.clone();
-						let h = v.health;
+						let h = v.max_health;
 						(n, h)
 					})
 					.collect::<Vec<_>>()
 			} else {
 				it.map(|v| {
 					let n = v.id.name.clone();
-					let h = v.health;
+					let h = v.max_health;
 					(n, h)
 				})
 				.collect::<Vec<_>>()
@@ -172,7 +177,7 @@ impl Encounter {
 		} else {
 			it.map(|v| {
 				let n = v.id.name.clone();
-				let h = v.health;
+				let h = v.max_health;
 				(n, h)
 			})
 			.collect::<Vec<_>>()
@@ -180,12 +185,29 @@ impl Encounter {
 	}
 
 	pub fn is_boss(&self) -> bool {
-		let players_health = self.players.iter().fold(0, |v, a| v + a.health);
+		let players_health = self.players.iter().fold(0, |v, a| v + a.max_health);
 		if let Some(npc) = self.npcs.v.first() {
-			npc.health > players_health
+			npc.max_health > players_health
 		} else {
 			false
 		}
+	}
+
+	pub fn player_by_name(&self, name: &str) -> Option<&ActorStats> {
+		let name = if let Some(idx) = name.find('(') {
+			name[..idx - 1].to_owned()
+		} else {
+			return None;
+		};
+		if let Some(p) = self.players.v.iter().find(|p| p.id.name == name) {
+			Some(p)
+		} else {
+			None
+		}
+	}
+
+	pub fn is_boss_dead(&self) -> bool {
+		self.npcs.iter().all(|v| v.is_dead())
 	}
 
 	pub fn elapsed(&self) -> Duration {
